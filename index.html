@@ -31,6 +31,268 @@ body{background-color:#282c34;min-height:100vh;display:flex;flex-direction:colum
 
 <script>
 var ALL = `
+// ************************************************************
+// QUICK PASTE GUIDE - WHAT TO COPY FOR WHAT QUESTION
+// ************************************************************
+//
+// ======================== GENERAL RULES ========================
+//
+// ALWAYS ADD THESE IMPORTS AT TOP OF ANY COMPONENT:
+//   import React, { useState, useEffect } from 'react';
+//   import axios from 'axios';
+//   const API = 'http://localhost:5000/api';
+//
+// FOR AUTH-PROTECTED COMPONENTS ALSO ADD:
+//   const getToken = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+//
+// ALWAYS ADD AT BOTTOM:
+//   export default ComponentName;
+//
+// FOR ANY SERVER PART ALWAYS COPY THESE FIRST:
+//   const express = require('express');
+//   const mongoose = require('mongoose');
+//   const cors = require('cors');
+//   require('dotenv').config();
+//   const app = express();
+//   app.use(cors());
+//   app.use(express.json());
+//   mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/DBNAME');
+//
+// IF SERVER NEEDS AUTH, ALSO COPY:
+//   const bcrypt = require('bcryptjs');
+//   const jwt = require('jsonwebtoken');
+//   + UserSchema + User model
+//   + auth middleware
+//   + /api/register route
+//   + /api/login route
+//
+// ======================== SETUP COMMANDS ========================
+//   Search: SETUP COMMANDS (SAME FOR ALL PROJECTS)
+//
+// ======================== STANDALONE COMPONENTS ========================
+//   Login page (email):     Search: STANDALONE: LOGIN + REGISTER PAGE (with email)
+//   Login page (username):  Search: STANDALONE: LOGIN + REGISTER PAGE (with username)
+//   CRUD Table:             Search: STANDALONE: CRUD TABLE COMPONENT
+//   CRUD Server:            Search: STANDALONE: GENERIC CRUD SERVER
+//   Navbar:                 Search: STANDALONE: NAVBAR COMPONENT
+//   Search/Filter:          Search: STANDALONE: SEARCH + FILTER COMPONENT
+//
+//
+// ============================================================
+// ASSIGNMENT 1 - HOSPITAL MANAGEMENT - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth middleware + /api/register + /api/login
+//   Patient CRUD       → PatientSchema + /api/patients (GET,POST,PUT,DELETE)
+//   Doctor CRUD        → DoctorSchema + /api/doctors (GET,POST,PUT,DELETE)
+//   Appointments       → AppointmentSchema + /api/appointments (GET,POST,PUT,DELETE)
+//   Billing            → BillingSchema + /api/billing (GET,POST,PUT)
+//   Medical Records    → /api/patients/:id/records (POST)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Patient Page       → function Patients()
+//   Doctor Page        → function Doctors()
+//   Appointments Page  → function Appointments()
+//   Billing Page       → function BillingComp()
+//   Main App + Nav     → export default function App()
+//
+//
+// ============================================================
+// ASSIGNMENT 2 - RESTAURANT ORDERING - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Menu CRUD          → MenuItemSchema + /api/menu (GET,POST,PUT,DELETE)
+//   Orders             → OrderSchema + /api/orders (GET,POST)
+//   Order Status       → /api/orders/:id/status (PUT)
+//   Order Tracking     → /api/track/:id (GET)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Menu Display       → function Menu({ cart, setCart })
+//   Shopping Cart      → function Cart({ cart, setCart, setPage })
+//   Order Tracking     → function TrackOrder()
+//   Admin Orders       → function AdminOrders()
+//   Main App + Nav     → export default function App()
+//
+//
+// ============================================================
+// ASSIGNMENT 3 - ONLINE EXAMINATION - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth + /api/register + /api/login
+//   Create Exam        → ExamSchema + /api/exams (POST) [teacher only]
+//   List Exams         → /api/exams (GET)
+//   Get Exam           → /api/exams/:id (GET) [hides answers for student]
+//   Submit Exam        → /api/exams/:id/submit (POST)
+//   Results            → ResultSchema + /api/results (GET)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Create Exam Form   → function CreateExam()
+//   Take Exam Page     → function TakeExam()
+//   Results Table      → function Results()
+//   Main App + Nav     → export default function App()
+//
+//
+// ============================================================
+// ASSIGNMENT 4 - LIBRARY MANAGEMENT - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth + /api/register + /api/login
+//   Book CRUD          → BookSchema + /api/books (GET with search, POST, PUT, DELETE)
+//   Issue Book         → IssueSchema + /api/issues (POST) [reduces availableCopies]
+//   Return Book        → /api/issues/:id/return (PUT) [increases availableCopies]
+//   List Issues        → /api/issues (GET)
+//   List Students      → /api/students (GET)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Books Page         → function Books({ user })
+//   Issues Page        → function Issues({ user })
+//   Main App + Nav     → export default function App()
+//
+//
+// ============================================================
+// ASSIGNMENT 5 - HOTEL ROOM BOOKING - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth + /api/register + /api/login
+//   Room Search        → RoomSchema + /api/rooms (GET with date filter, POST)
+//   Create Booking     → BookingSchema + /api/bookings (POST) [calculates total]
+//   List Bookings      → /api/bookings (GET)
+//   Pay Booking        → /api/bookings/:id/pay (PUT)
+//   Cancel Booking     → /api/bookings/:id/cancel (PUT)
+//   Dashboard Stats    → /api/dashboard (GET) [totalRooms, totalBookings, revenue]
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Room Search Page   → function RoomSearch()
+//   My Bookings Page   → function MyBookings()
+//   Admin Dashboard    → function AdminDashboard() [only in full App not standalone]
+//   Main App + Nav     → export default function App()
+//
+//
+// ============================================================
+// ASSIGNMENT 6 - JOB PORTAL - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth + /api/register + /api/login
+//   Resume Upload      → multer + /api/upload-resume (POST)
+//   Job CRUD           → JobSchema + /api/jobs (GET with search, POST, DELETE)
+//   Apply to Job       → ApplicationSchema + /api/applications (POST)
+//   List Applications  → /api/applications (GET)
+//   Update App Status  → /api/applications/:id/status (PUT)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Job Listings       → function JobList({ user })
+//   Post Job Form      → function PostJob()
+//   Applications List  → function Applications({ user })
+//   Main App + Nav     → export default function App()
+//
+// EXTRA: needs multer → npm install multer
+//   const multer = require('multer');
+//   const upload = multer({ dest: 'uploads/' });
+//   app.use('/uploads', express.static('uploads'));
+//
+//
+// ============================================================
+// ASSIGNMENT 7 - E-LEARNING PLATFORM - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth + /api/register + /api/login
+//   Course CRUD        → CourseSchema + /api/courses (GET with search, POST)
+//   Get Course         → /api/courses/:id (GET)
+//   Enroll Student     → /api/courses/:id/enroll (POST)
+//   My Courses         → /api/my-courses (GET)
+//   Track Progress     → ProgressSchema + /api/progress/:courseId (GET)
+//   Complete Lecture   → /api/progress/:courseId/lecture (POST)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Course Listings    → function CourseList({ user })
+//   My Courses Page    → function MyCourses()
+//   Create Course Form → function CreateCourse()
+//   Main App + Nav     → export default function App()
+//
+//
+// ============================================================
+// ASSIGNMENT 8 - VEHICLE RENTAL - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth + /api/register + /api/login
+//   Vehicle CRUD       → VehicleSchema + /api/vehicles (GET with filter, POST, DELETE)
+//   Rent Vehicle       → RentalSchema + /api/rentals (POST) [sets isAvailable=false]
+//   List Rentals       → /api/rentals (GET)
+//   Return Vehicle     → /api/rentals/:id/return (PUT) [sets isAvailable=true]
+//   Cancel Rental      → /api/rentals/:id/cancel (PUT)
+//   List Customers     → /api/customers (GET)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Vehicle Search     → function VehicleSearch()
+//   My Rentals Page    → function MyRentals()
+//   Admin Panel        → function AdminPanel() [only in full App]
+//   Main App + Nav     → export default function App()
+//
+//
+// ============================================================
+// ASSIGNMENT 9 - MOVIE TICKET BOOKING - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth + /api/register + /api/login
+//   Movie CRUD         → MovieSchema + /api/movies (GET with search, POST)
+//   Get Movie          → /api/movies/:id (GET)
+//   Seat Map           → /api/movies/:id/shows/:showIdx/seats (GET)
+//   Book Tickets       → BookingSchema + /api/bookings (POST) [adds to bookedSeats]
+//   Booking History    → /api/bookings (GET)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Movie List         → function MovieList({ onSelect })
+//   Seat Selection     → function SeatSelection({ movie, onBack })
+//   Booking History    → function BookingHistory()
+//   Main App + Nav     → export default function App()
+//
+//
+// ============================================================
+// ASSIGNMENT 10 - COLLEGE EVENT MGMT - COMPONENT MAP
+// ============================================================
+//
+// SERVER PARTS (in server.js):
+//   Login/Register     → UserSchema + auth + /api/register + /api/login
+//   Event CRUD         → EventSchema + /api/events (GET, POST, PUT, DELETE)
+//   Get Event          → /api/events/:id (GET)
+//   Register for Event → /api/events/:id/register (POST)
+//   Unregister         → /api/events/:id/unregister (POST)
+//   Attendance         → AttendanceSchema + /api/events/:id/attendance (GET)
+//   Check-in           → /api/attendance/:id/checkin (PUT)
+//   My Events          → /api/my-events (GET)
+//   Schedule           → /api/schedule (GET)
+//   Dashboard Stats    → /api/dashboard (GET)
+//
+// FRONTEND PARTS (in App.jsx):
+//   Login/Register     → function Auth({ onLogin })
+//   Event Listings     → function EventList({ user })
+//   Create Event Form  → function CreateEvent()
+//   Manage Attendance  → function ManageParticipants()
+//   Schedule Table     → function Schedule()
+//   My Events Page     → function MyEvents()
+//   Dashboard Stats    → function Dashboard() [only in full App]
+//   Main App + Nav     → export default function App()
+//
+// ************************************************************
+
+
 // ============================================================
 // ASSIGNMENT 1 - HOSPITAL MANAGEMENT SYSTEM
 // ============================================================
@@ -143,19 +405,20 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 const API = 'http://localhost:5000/api';
 
-function Login({ onLogin }) {
-  const [form, setForm] = useState({ username: '', password: '' });
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ username: '', password: '', role: 'staff' });
   const handle = async (e) => {
     e.preventDefault();
-    const { data } = await axios.post(\`\${API}/login\`, form);
-    localStorage.setItem('token', data.token);
-    onLogin(data.user);
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); alert('Registered! Now login.'); }
   };
   return (<form onSubmit={handle}>
-    <h2>Login</h2>
+    <h2>{isLogin ? 'Login' : 'Register'}</h2>
     <input placeholder="Username" onChange={e => setForm({...form, username: e.target.value})} />
     <input type="password" placeholder="Password" onChange={e => setForm({...form, password: e.target.value})} />
-    <button type="submit">Login</button>
+    <button type="submit">{isLogin ? 'Login' : 'Register'}</button>
+    <button type="button" onClick={() => setIsLogin(!isLogin)}>{isLogin ? 'Register' : 'Login'}</button>
   </form>);
 }
 
@@ -252,7 +515,7 @@ function BillingComp() {
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState('patients');
-  if (!user) return <Login onLogin={setUser} />;
+  if (!user) return <Auth onLogin={setUser} />;
   return (<div>
     <nav><button onClick={() => setPage('patients')}>Patients</button><button onClick={() => setPage('doctors')}>Doctors</button><button onClick={() => setPage('appointments')}>Appointments</button><button onClick={() => setPage('billing')}>Billing</button><button onClick={() => { localStorage.removeItem('token'); setUser(null); }}>Logout</button></nav>
     {page === 'patients' && <Patients />}
@@ -1592,6 +1855,214 @@ PORT=5000
 
 // ========== package.json ==========
 { "name": "event-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// SETUP COMMANDS (SAME FOR ALL PROJECTS)
+// ============================================================
+
+// BACKEND SETUP:
+// mkdir server && cd server
+// npm init -y
+// npm install express mongoose cors bcryptjs jsonwebtoken dotenv
+// -- paste server.js and .env in server folder
+// -- run: node server.js
+
+// FRONTEND SETUP:
+// npx create-react-app client
+// cd client
+// npm install axios react-router-dom
+// -- replace src/App.js with App.jsx code
+// -- run: npm start
+
+// MongoDB: run mongod in separate terminal
+// Backend runs on localhost:5000
+// Frontend runs on localhost:3000
+
+
+// ============================================================
+// STANDALONE COMPONENTS (USE IF ASKED FOR SPECIFIC PART)
+// ============================================================
+
+
+// ---------- STANDALONE: LOGIN + REGISTER PAGE (with email) ----------
+
+import React, { useState } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+
+export default function AuthPage() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student' });
+  const [msg, setMsg] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (isLogin) {
+        const { data } = await axios.post(\`\${API}/login\`, { email: form.email, password: form.password });
+        localStorage.setItem('token', data.token);
+        setMsg('Login successful! Token saved.');
+      } else {
+        await axios.post(\`\${API}/register\`, form);
+        setMsg('Registered! Now login.');
+        setIsLogin(true);
+      }
+    } catch (err) { setMsg(err.response?.data?.error || 'Error'); }
+  };
+
+  return (
+    <div style={{maxWidth:400,margin:'50px auto',padding:20}}>
+      <h2>{isLogin ? 'Login' : 'Register'}</h2>
+      <form onSubmit={handleSubmit}>
+        {!isLogin && <input placeholder="Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} style={{display:'block',width:'100%',marginBottom:10,padding:8}} />}
+        <input placeholder="Email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} style={{display:'block',width:'100%',marginBottom:10,padding:8}} />
+        <input type="password" placeholder="Password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} style={{display:'block',width:'100%',marginBottom:10,padding:8}} />
+        {!isLogin && <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} style={{display:'block',width:'100%',marginBottom:10,padding:8}}><option value="student">Student</option><option value="teacher">Teacher</option><option value="admin">Admin</option></select>}
+        <button type="submit" style={{padding:'8px 20px',marginRight:10}}>{isLogin ? 'Login' : 'Register'}</button>
+        <button type="button" onClick={() => setIsLogin(!isLogin)} style={{padding:'8px 20px'}}>{isLogin ? 'Switch to Register' : 'Switch to Login'}</button>
+      </form>
+      {msg && <p style={{marginTop:10,color:'green'}}>{msg}</p>}
+    </div>
+  );
+}
+
+
+// ---------- STANDALONE: LOGIN + REGISTER PAGE (with username) ----------
+
+import React, { useState } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+
+export default function AuthPage() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ username: '', password: '' });
+  const [msg, setMsg] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (isLogin) {
+        const { data } = await axios.post(\`\${API}/login\`, form);
+        localStorage.setItem('token', data.token);
+        setMsg('Login successful!');
+      } else {
+        await axios.post(\`\${API}/register\`, form);
+        setMsg('Registered! Now login.');
+        setIsLogin(true);
+      }
+    } catch (err) { setMsg(err.response?.data?.error || 'Error'); }
+  };
+
+  return (
+    <div style={{maxWidth:400,margin:'50px auto',padding:20}}>
+      <h2>{isLogin ? 'Login' : 'Register'}</h2>
+      <form onSubmit={handleSubmit}>
+        <input placeholder="Username" value={form.username} onChange={e => setForm({...form, username: e.target.value})} style={{display:'block',width:'100%',marginBottom:10,padding:8}} />
+        <input type="password" placeholder="Password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} style={{display:'block',width:'100%',marginBottom:10,padding:8}} />
+        <button type="submit" style={{padding:'8px 20px',marginRight:10}}>{isLogin ? 'Login' : 'Register'}</button>
+        <button type="button" onClick={() => setIsLogin(!isLogin)} style={{padding:'8px 20px'}}>{isLogin ? 'Register' : 'Login'}</button>
+      </form>
+      {msg && <p style={{marginTop:10,color:'green'}}>{msg}</p>}
+    </div>
+  );
+}
+
+
+// ---------- STANDALONE: CRUD TABLE COMPONENT ----------
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+
+export default function CrudTable() {
+  const [items, setItems] = useState([]);
+  const [form, setForm] = useState({ name: '', email: '', phone: '' });
+  const [editId, setEditId] = useState(null);
+
+  useEffect(() => { fetchItems(); }, []);
+  const fetchItems = async () => { const { data } = await axios.get(\`\${API}/items\`); setItems(data); };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (editId) { await axios.put(\`\${API}/items/\${editId}\`, form); setEditId(null); }
+    else { await axios.post(\`\${API}/items\`, form); }
+    setForm({ name: '', email: '', phone: '' }); fetchItems();
+  };
+
+  const handleEdit = (item) => { setEditId(item._id); setForm({ name: item.name, email: item.email, phone: item.phone }); };
+  const handleDelete = async (id) => { await axios.delete(\`\${API}/items/\${id}\`); fetchItems(); };
+
+  return (
+    <div style={{padding:20}}>
+      <h2>CRUD Operations</h2>
+      <form onSubmit={handleSubmit}>
+        <input placeholder="Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+        <input placeholder="Email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+        <input placeholder="Phone" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+        <button type="submit">{editId ? 'Update' : 'Add'}</button>
+        {editId && <button type="button" onClick={() => { setEditId(null); setForm({ name: '', email: '', phone: '' }); }}>Cancel</button>}
+      </form>
+      <table border="1" style={{marginTop:10,borderCollapse:'collapse',width:'100%'}}>
+        <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Actions</th></tr></thead>
+        <tbody>{items.map(i => <tr key={i._id}>
+          <td>{i.name}</td><td>{i.email}</td><td>{i.phone}</td>
+          <td><button onClick={() => handleEdit(i)}>Edit</button> <button onClick={() => handleDelete(i._id)}>Delete</button></td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  );
+}
+
+
+// ---------- STANDALONE: GENERIC CRUD SERVER (for any model) ----------
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+app.use(cors()); app.use(express.json());
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/myapp');
+
+const ItemSchema = new mongoose.Schema({ name: String, email: String, phone: String }, { timestamps: true });
+const Item = mongoose.model('Item', ItemSchema);
+
+app.get('/api/items', async (req, res) => res.json(await Item.find()));
+app.get('/api/items/:id', async (req, res) => res.json(await Item.findById(req.params.id)));
+app.post('/api/items', async (req, res) => res.json(await Item.create(req.body)));
+app.put('/api/items/:id', async (req, res) => res.json(await Item.findByIdAndUpdate(req.params.id, req.body, { new: true })));
+app.delete('/api/items/:id', async (req, res) => { await Item.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ---------- STANDALONE: NAVBAR COMPONENT ----------
+
+function Navbar({ pages, currentPage, setPage, onLogout }) {
+  return (
+    <nav style={{display:'flex',gap:10,padding:10,background:'#333',color:'#fff'}}>
+      {pages.map(p => <button key={p} onClick={() => setPage(p)} style={{padding:'6px 16px',background:currentPage===p?'#61dafb':'transparent',color:currentPage===p?'#000':'#fff',border:'1px solid #61dafb',borderRadius:4,cursor:'pointer'}}>{p}</button>)}
+      {onLogout && <button onClick={onLogout} style={{marginLeft:'auto',padding:'6px 16px',background:'#f44',color:'#fff',border:'none',borderRadius:4,cursor:'pointer'}}>Logout</button>}
+    </nav>
+  );
+}
+
+
+// ---------- STANDALONE: SEARCH + FILTER COMPONENT ----------
+
+function SearchFilter({ onSearch, categories }) {
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  useEffect(() => { onSearch(search, category); }, [search, category]);
+  return (
+    <div style={{display:'flex',gap:10,marginBottom:10}}>
+      <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{padding:8,flex:1}} />
+      {categories && <select value={category} onChange={e => setCategory(e.target.value)} style={{padding:8}}><option value="">All</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select>}
+    </div>
+  );
+}
 `;
 
 function copyAll(btn) {
