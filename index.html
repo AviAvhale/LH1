@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>React App</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background-color:#282c34;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Roboto','Oxygen','Ubuntu',sans-serif;color:white;overflow:hidden}
+.App-logo{height:40vmin;pointer-events:none;animation:App-logo-spin infinite 20s linear}
+@keyframes App-logo-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.App-header{display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:calc(10px + 2vmin)}
+.App-header p{margin:16px 0}
+.App-header code{font-size:inherit}
+.App-link{color:#61dafb;text-decoration:none;font-size:14px;margin-top:8px}
+.copy-btn{margin-top:24px;background:transparent;border:1px solid #61dafb;color:#61dafb;padding:10px 32px;border-radius:24px;cursor:pointer;font-size:15px;font-family:inherit;transition:all 0.3s;letter-spacing:0.5px}
+.copy-btn:hover{background:#61dafb;color:#282c34}
+.copy-btn.copied{background:#4caf50;border-color:#4caf50;color:#fff}
+#hiddenData{position:absolute;left:-9999px;top:-9999px;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="App-header">
+<svg class="App-logo" xmlns="http://www.w3.org/2000/svg" viewBox="-11.5 -10.23174 23 20.46348"><circle r="2.05" fill="#61dafb"/><g stroke="#61dafb" stroke-width="1" fill="none"><ellipse rx="11" ry="4.2"/><ellipse rx="11" ry="4.2" transform="rotate(60)"/><ellipse rx="11" ry="4.2" transform="rotate(120)"/></g></svg>
+<p>Edit <code>src/App.js</code> and save to reload.</p>
+<a class="App-link" href="https://reactjs.org" target="_blank" rel="noopener noreferrer">Learn React</a>
+<button class="copy-btn" onclick="copyAll(this)">Copy</button>
+</div>
+
+<div id="hiddenData"><div id="allCode"></div></div>
+
+<script>
+var ALL = `
+// ============================================================
+// ASSIGNMENT 1 - HOSPITAL MANAGEMENT SYSTEM
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/hospital');
+
+const PatientSchema = new mongoose.Schema({
+  name: String, age: Number, gender: String, phone: String, email: String,
+  address: String, medicalHistory: [{ condition: String, date: Date, notes: String }],
+  createdAt: { type: Date, default: Date.now }
+});
+const Patient = mongoose.model('Patient', PatientSchema);
+
+const DoctorSchema = new mongoose.Schema({
+  name: String, specialization: String, phone: String, email: String,
+  schedule: [{ day: String, startTime: String, endTime: String }],
+  available: { type: Boolean, default: true }
+});
+const Doctor = mongoose.model('Doctor', DoctorSchema);
+
+const AppointmentSchema = new mongoose.Schema({
+  patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient' },
+  doctor: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor' },
+  date: Date, time: String, status: { type: String, default: 'scheduled' },
+  notes: String
+});
+const Appointment = mongoose.model('Appointment', AppointmentSchema);
+
+const BillingSchema = new mongoose.Schema({
+  patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient' },
+  appointment: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
+  amount: Number, description: String, status: { type: String, default: 'pending' },
+  date: { type: Date, default: Date.now }
+});
+const Billing = mongoose.model('Billing', BillingSchema);
+
+const UserSchema = new mongoose.Schema({
+  username: String, password: String, role: { type: String, default: 'staff' }
+});
+const User = mongoose.model('User', UserSchema);
+
+const auth = (req, res, next) => {
+  try {
+    const token = req.headers.authorization.split(' ')[1];
+    req.user = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    next();
+  } catch(e) { res.status(401).json({ error: 'Unauthorized' }); }
+};
+
+app.post('/api/register', async (req, res) => {
+  const hash = await bcrypt.hash(req.body.password, 10);
+  const user = await User.create({ ...req.body, password: hash });
+  res.json(user);
+});
+
+app.post('/api/login', async (req, res) => {
+  const user = await User.findOne({ username: req.body.username });
+  if (!user || !(await bcrypt.compare(req.body.password, user.password)))
+    return res.status(401).json({ error: 'Invalid credentials' });
+  const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET || 'secret');
+  res.json({ token, user: { id: user._id, username: user.username, role: user.role } });
+});
+
+app.get('/api/patients', async (req, res) => res.json(await Patient.find()));
+app.get('/api/patients/:id', async (req, res) => res.json(await Patient.findById(req.params.id)));
+app.post('/api/patients', async (req, res) => res.json(await Patient.create(req.body)));
+app.put('/api/patients/:id', async (req, res) => res.json(await Patient.findByIdAndUpdate(req.params.id, req.body, { new: true })));
+app.delete('/api/patients/:id', async (req, res) => { await Patient.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.get('/api/doctors', async (req, res) => res.json(await Doctor.find()));
+app.post('/api/doctors', async (req, res) => res.json(await Doctor.create(req.body)));
+app.put('/api/doctors/:id', async (req, res) => res.json(await Doctor.findByIdAndUpdate(req.params.id, req.body, { new: true })));
+app.delete('/api/doctors/:id', async (req, res) => { await Doctor.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.get('/api/appointments', async (req, res) => res.json(await Appointment.find().populate('patient doctor')));
+app.post('/api/appointments', async (req, res) => res.json(await Appointment.create(req.body)));
+app.put('/api/appointments/:id', async (req, res) => res.json(await Appointment.findByIdAndUpdate(req.params.id, req.body, { new: true })));
+app.delete('/api/appointments/:id', async (req, res) => { await Appointment.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.get('/api/billing', async (req, res) => res.json(await Billing.find().populate('patient')));
+app.post('/api/billing', async (req, res) => res.json(await Billing.create(req.body)));
+app.put('/api/billing/:id', async (req, res) => res.json(await Billing.findByIdAndUpdate(req.params.id, req.body, { new: true })));
+
+app.post('/api/patients/:id/records', async (req, res) => {
+  const patient = await Patient.findById(req.params.id);
+  patient.medicalHistory.push(req.body);
+  await patient.save();
+  res.json(patient);
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+
+function Login({ onLogin }) {
+  const [form, setForm] = useState({ username: '', password: '' });
+  const handle = async (e) => {
+    e.preventDefault();
+    const { data } = await axios.post(\`\${API}/login\`, form);
+    localStorage.setItem('token', data.token);
+    onLogin(data.user);
+  };
+  return (<form onSubmit={handle}>
+    <h2>Login</h2>
+    <input placeholder="Username" onChange={e => setForm({...form, username: e.target.value})} />
+    <input type="password" placeholder="Password" onChange={e => setForm({...form, password: e.target.value})} />
+    <button type="submit">Login</button>
+  </form>);
+}
+
+function Patients() {
+  const [patients, setPatients] = useState([]);
+  const [form, setForm] = useState({ name: '', age: '', gender: '', phone: '', email: '', address: '' });
+  useEffect(() => { fetchPatients(); }, []);
+  const fetchPatients = async () => { const { data } = await axios.get(\`\${API}/patients\`); setPatients(data); };
+  const addPatient = async (e) => { e.preventDefault(); await axios.post(\`\${API}/patients\`, form); setForm({ name: '', age: '', gender: '', phone: '', email: '', address: '' }); fetchPatients(); };
+  const deletePatient = async (id) => { await axios.delete(\`\${API}/patients/\${id}\`); fetchPatients(); };
+  return (<div>
+    <h2>Patients</h2>
+    <form onSubmit={addPatient}>
+      <input placeholder="Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+      <input placeholder="Age" type="number" value={form.age} onChange={e => setForm({...form, age: e.target.value})} />
+      <select value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}><option value="">Gender</option><option>Male</option><option>Female</option></select>
+      <input placeholder="Phone" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+      <input placeholder="Email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+      <button type="submit">Add Patient</button>
+    </form>
+    <table><thead><tr><th>Name</th><th>Age</th><th>Gender</th><th>Phone</th><th>Actions</th></tr></thead>
+    <tbody>{patients.map(p => <tr key={p._id}><td>{p.name}</td><td>{p.age}</td><td>{p.gender}</td><td>{p.phone}</td><td><button onClick={() => deletePatient(p._id)}>Delete</button></td></tr>)}</tbody></table>
+  </div>);
+}
+
+function Doctors() {
+  const [doctors, setDoctors] = useState([]);
+  const [form, setForm] = useState({ name: '', specialization: '', phone: '', email: '' });
+  useEffect(() => { fetchDoctors(); }, []);
+  const fetchDoctors = async () => { const { data } = await axios.get(\`\${API}/doctors\`); setDoctors(data); };
+  const addDoctor = async (e) => { e.preventDefault(); await axios.post(\`\${API}/doctors\`, form); setForm({ name: '', specialization: '', phone: '', email: '' }); fetchDoctors(); };
+  const deleteDoctor = async (id) => { await axios.delete(\`\${API}/doctors/\${id}\`); fetchDoctors(); };
+  return (<div>
+    <h2>Doctors</h2>
+    <form onSubmit={addDoctor}>
+      <input placeholder="Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+      <input placeholder="Specialization" value={form.specialization} onChange={e => setForm({...form, specialization: e.target.value})} />
+      <input placeholder="Phone" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+      <button type="submit">Add Doctor</button>
+    </form>
+    <table><thead><tr><th>Name</th><th>Specialization</th><th>Phone</th><th>Actions</th></tr></thead>
+    <tbody>{doctors.map(d => <tr key={d._id}><td>{d.name}</td><td>{d.specialization}</td><td>{d.phone}</td><td><button onClick={() => deleteDoctor(d._id)}>Delete</button></td></tr>)}</tbody></table>
+  </div>);
+}
+
+function Appointments() {
+  const [appts, setAppts] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [form, setForm] = useState({ patient: '', doctor: '', date: '', time: '', notes: '' });
+  useEffect(() => { fetchAll(); }, []);
+  const fetchAll = async () => {
+    const [a, p, d] = await Promise.all([axios.get(\`\${API}/appointments\`), axios.get(\`\${API}/patients\`), axios.get(\`\${API}/doctors\`)]);
+    setAppts(a.data); setPatients(p.data); setDoctors(d.data);
+  };
+  const addAppt = async (e) => { e.preventDefault(); await axios.post(\`\${API}/appointments\`, form); fetchAll(); };
+  return (<div>
+    <h2>Appointments</h2>
+    <form onSubmit={addAppt}>
+      <select onChange={e => setForm({...form, patient: e.target.value})}><option value="">Select Patient</option>{patients.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</select>
+      <select onChange={e => setForm({...form, doctor: e.target.value})}><option value="">Select Doctor</option>{doctors.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}</select>
+      <input type="date" onChange={e => setForm({...form, date: e.target.value})} />
+      <input type="time" onChange={e => setForm({...form, time: e.target.value})} />
+      <button type="submit">Book</button>
+    </form>
+    <table><thead><tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Status</th></tr></thead>
+    <tbody>{appts.map(a => <tr key={a._id}><td>{a.patient?.name}</td><td>{a.doctor?.name}</td><td>{new Date(a.date).toLocaleDateString()}</td><td>{a.status}</td></tr>)}</tbody></table>
+  </div>);
+}
+
+function BillingComp() {
+  const [bills, setBills] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [form, setForm] = useState({ patient: '', amount: '', description: '' });
+  useEffect(() => { fetchAll(); }, []);
+  const fetchAll = async () => {
+    const [b, p] = await Promise.all([axios.get(\`\${API}/billing\`), axios.get(\`\${API}/patients\`)]);
+    setBills(b.data); setPatients(p.data);
+  };
+  const addBill = async (e) => { e.preventDefault(); await axios.post(\`\${API}/billing\`, form); fetchAll(); };
+  return (<div>
+    <h2>Billing</h2>
+    <form onSubmit={addBill}>
+      <select onChange={e => setForm({...form, patient: e.target.value})}><option value="">Select Patient</option>{patients.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</select>
+      <input type="number" placeholder="Amount" onChange={e => setForm({...form, amount: e.target.value})} />
+      <input placeholder="Description" onChange={e => setForm({...form, description: e.target.value})} />
+      <button type="submit">Add Bill</button>
+    </form>
+    <table><thead><tr><th>Patient</th><th>Amount</th><th>Description</th><th>Status</th></tr></thead>
+    <tbody>{bills.map(b => <tr key={b._id}><td>{b.patient?.name}</td><td>Rs.{b.amount}</td><td>{b.description}</td><td>{b.status}</td></tr>)}</tbody></table>
+  </div>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState('patients');
+  if (!user) return <Login onLogin={setUser} />;
+  return (<div>
+    <nav><button onClick={() => setPage('patients')}>Patients</button><button onClick={() => setPage('doctors')}>Doctors</button><button onClick={() => setPage('appointments')}>Appointments</button><button onClick={() => setPage('billing')}>Billing</button><button onClick={() => { localStorage.removeItem('token'); setUser(null); }}>Logout</button></nav>
+    {page === 'patients' && <Patients />}
+    {page === 'doctors' && <Doctors />}
+    {page === 'appointments' && <Appointments />}
+    {page === 'billing' && <BillingComp />}
+  </div>);
+}
+
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/hospital
+JWT_SECRET=hospitalsecret123
+PORT=5000
+
+// ========== package.json (server) ==========
+{ "name": "hospital-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" }, "devDependencies": { "nodemon": "^3.0.0" } }
+
+// ========== package.json (client) ==========
+{ "name": "hospital-client", "version": "1.0.0", "dependencies": { "react": "^18.2.0", "react-dom": "^18.2.0", "axios": "^1.4.0", "react-router-dom": "^6.0.0" }, "scripts": { "start": "react-scripts start", "build": "react-scripts build" } }
+
+
+// ============================================================
+// ASSIGNMENT 2 - RESTAURANT ORDERING WEB APPLICATION
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/restaurant');
+
+const MenuItemSchema = new mongoose.Schema({
+  name: String, description: String, price: Number, category: String,
+  image: String, available: { type: Boolean, default: true }
+});
+const MenuItem = mongoose.model('MenuItem', MenuItemSchema);
+
+const OrderSchema = new mongoose.Schema({
+  items: [{ menuItem: { type: mongoose.Schema.Types.ObjectId, ref: 'MenuItem' }, name: String, price: Number, quantity: Number }],
+  totalAmount: Number, customerName: String, customerPhone: String, customerAddress: String,
+  status: { type: String, default: 'placed', enum: ['placed', 'preparing', 'out-for-delivery', 'delivered'] },
+  createdAt: { type: Date, default: Date.now }
+});
+const Order = mongoose.model('Order', OrderSchema);
+
+app.get('/api/menu', async (req, res) => {
+  const { category } = req.query;
+  const filter = category ? { category } : {};
+  res.json(await MenuItem.find(filter));
+});
+app.post('/api/menu', async (req, res) => res.json(await MenuItem.create(req.body)));
+app.put('/api/menu/:id', async (req, res) => res.json(await MenuItem.findByIdAndUpdate(req.params.id, req.body, { new: true })));
+app.delete('/api/menu/:id', async (req, res) => { await MenuItem.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.get('/api/orders', async (req, res) => res.json(await Order.find().sort({ createdAt: -1 })));
+app.post('/api/orders', async (req, res) => {
+  const { items, customerName, customerPhone, customerAddress } = req.body;
+  const totalAmount = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  res.json(await Order.create({ items, totalAmount, customerName, customerPhone, customerAddress }));
+});
+app.put('/api/orders/:id/status', async (req, res) => {
+  res.json(await Order.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true }));
+});
+app.get('/api/track/:id', async (req, res) => {
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Not found' });
+  res.json({ status: order.status, items: order.items, total: order.totalAmount });
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+
+function Menu({ cart, setCart }) {
+  const [items, setItems] = useState([]);
+  const [category, setCategory] = useState('');
+  useEffect(() => { axios.get(\`\${API}/menu\${category ? '?category=' + category : ''}\`).then(r => setItems(r.data)); }, [category]);
+  const addToCart = (item) => {
+    const exists = cart.find(c => c._id === item._id);
+    if (exists) setCart(cart.map(c => c._id === item._id ? { ...c, quantity: c.quantity + 1 } : c));
+    else setCart([...cart, { ...item, quantity: 1 }]);
+  };
+  return (<div>
+    <h2>Menu</h2>
+    <div><button onClick={() => setCategory('')}>All</button><button onClick={() => setCategory('starters')}>Starters</button><button onClick={() => setCategory('mains')}>Mains</button><button onClick={() => setCategory('desserts')}>Desserts</button><button onClick={() => setCategory('drinks')}>Drinks</button></div>
+    {items.map(item => <div key={item._id} style={{border:'1px solid #ccc',padding:8,margin:4}}>
+      <h3>{item.name}</h3><p>{item.description}</p><p>Rs.{item.price}</p>
+      <button onClick={() => addToCart(item)}>Add to Cart</button>
+    </div>)}
+  </div>);
+}
+
+function Cart({ cart, setCart, setPage }) {
+  const [form, setForm] = useState({ customerName: '', customerPhone: '', customerAddress: '' });
+  const total = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const removeItem = (id) => setCart(cart.filter(c => c._id !== id));
+  const updateQty = (id, qty) => { if (qty < 1) return removeItem(id); setCart(cart.map(c => c._id === id ? { ...c, quantity: qty } : c)); };
+  const placeOrder = async () => {
+    const items = cart.map(c => ({ menuItem: c._id, name: c.name, price: c.price, quantity: c.quantity }));
+    await axios.post(\`\${API}/orders\`, { items, ...form });
+    setCart([]); alert('Order placed!'); setPage('track');
+  };
+  return (<div>
+    <h2>Cart</h2>
+    {cart.length === 0 ? <p>Empty</p> : <>
+      {cart.map(c => <div key={c._id}>{c.name} x {c.quantity} = Rs.{c.price * c.quantity} <button onClick={() => updateQty(c._id, c.quantity - 1)}>-</button><button onClick={() => updateQty(c._id, c.quantity + 1)}>+</button><button onClick={() => removeItem(c._id)}>Remove</button></div>)}
+      <p><strong>Total: Rs.{total}</strong></p>
+      <input placeholder="Name" onChange={e => setForm({...form, customerName: e.target.value})} />
+      <input placeholder="Phone" onChange={e => setForm({...form, customerPhone: e.target.value})} />
+      <input placeholder="Address" onChange={e => setForm({...form, customerAddress: e.target.value})} />
+      <button onClick={placeOrder}>Place Order</button>
+    </>}
+  </div>);
+}
+
+function TrackOrder() {
+  const [orderId, setOrderId] = useState('');
+  const [order, setOrder] = useState(null);
+  const track = async () => { const { data } = await axios.get(\`\${API}/track/\${orderId}\`); setOrder(data); };
+  return (<div><h2>Track Order</h2>
+    <input placeholder="Order ID" value={orderId} onChange={e => setOrderId(e.target.value)} />
+    <button onClick={track}>Track</button>
+    {order && <div><p>Status: <strong>{order.status}</strong></p><p>Total: Rs.{order.total}</p></div>}
+  </div>);
+}
+
+function AdminOrders() {
+  const [orders, setOrders] = useState([]);
+  useEffect(() => { fetchOrders(); }, []);
+  const fetchOrders = async () => { const { data } = await axios.get(\`\${API}/orders\`); setOrders(data); };
+  const updateStatus = async (id, status) => { await axios.put(\`\${API}/orders/\${id}/status\`, { status }); fetchOrders(); };
+  return (<div><h2>Orders</h2>
+    {orders.map(o => <div key={o._id} style={{border:'1px solid #ccc',padding:8,margin:4}}>
+      <p>{o._id} | {o.customerName} | Rs.{o.totalAmount} | {o.status}</p>
+      <select value={o.status} onChange={e => updateStatus(o._id, e.target.value)}>
+        <option value="placed">Placed</option><option value="preparing">Preparing</option><option value="out-for-delivery">Out for Delivery</option><option value="delivered">Delivered</option>
+      </select>
+    </div>)}
+  </div>);
+}
+
+export default function App() {
+  const [page, setPage] = useState('menu');
+  const [cart, setCart] = useState([]);
+  return (<div>
+    <nav><button onClick={() => setPage('menu')}>Menu</button><button onClick={() => setPage('cart')}>Cart ({cart.length})</button><button onClick={() => setPage('track')}>Track</button><button onClick={() => setPage('admin')}>Admin</button></nav>
+    {page === 'menu' && <Menu cart={cart} setCart={setCart} />}
+    {page === 'cart' && <Cart cart={cart} setCart={setCart} setPage={setPage} />}
+    {page === 'track' && <TrackOrder />}
+    {page === 'admin' && <AdminOrders />}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/restaurant
+PORT=5000
+
+// ========== package.json (server) ==========
+{ "name": "restaurant-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// ASSIGNMENT 3 - ONLINE EXAMINATION SYSTEM
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/examination');
+
+const UserSchema = new mongoose.Schema({
+  name: String, email: String, password: String,
+  role: { type: String, enum: ['student', 'teacher'], default: 'student' }
+});
+const User = mongoose.model('User', UserSchema);
+
+const ExamSchema = new mongoose.Schema({
+  title: String, description: String, duration: Number,
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  questions: [{ question: String, options: [String], correctAnswer: Number, marks: Number }],
+  isActive: { type: Boolean, default: true }, createdAt: { type: Date, default: Date.now }
+});
+const Exam = mongoose.model('Exam', ExamSchema);
+
+const ResultSchema = new mongoose.Schema({
+  student: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  exam: { type: mongoose.Schema.Types.ObjectId, ref: 'Exam' },
+  answers: [Number], score: Number, totalMarks: Number, percentage: Number,
+  submittedAt: { type: Date, default: Date.now }
+});
+const Result = mongoose.model('Result', ResultSchema);
+
+const auth = (req, res, next) => {
+  try { req.user = jwt.verify(req.headers.authorization.split(' ')[1], 'secret'); next(); }
+  catch(e) { res.status(401).json({ error: 'Unauthorized' }); }
+};
+
+app.post('/api/register', async (req, res) => {
+  const hash = await bcrypt.hash(req.body.password, 10);
+  res.json(await User.create({ ...req.body, password: hash }));
+});
+app.post('/api/login', async (req, res) => {
+  const user = await User.findOne({ email: req.body.email });
+  if (!user || !(await bcrypt.compare(req.body.password, user.password))) return res.status(401).json({ error: 'Invalid' });
+  res.json({ token: jwt.sign({ id: user._id, role: user.role, name: user.name }, 'secret'), user: { id: user._id, name: user.name, role: user.role } });
+});
+
+app.post('/api/exams', auth, async (req, res) => {
+  if (req.user.role !== 'teacher') return res.status(403).json({ error: 'Only teachers' });
+  res.json(await Exam.create({ ...req.body, createdBy: req.user.id }));
+});
+app.get('/api/exams', async (req, res) => res.json(await Exam.find({ isActive: true }).select('-questions.correctAnswer')));
+app.get('/api/exams/:id', auth, async (req, res) => {
+  const exam = await Exam.findById(req.params.id);
+  if (req.user.role === 'student') { const e = exam.toObject(); e.questions = e.questions.map(q => ({ ...q, correctAnswer: undefined })); return res.json(e); }
+  res.json(exam);
+});
+
+app.post('/api/exams/:id/submit', auth, async (req, res) => {
+  const exam = await Exam.findById(req.params.id);
+  const { answers } = req.body;
+  let score = 0, totalMarks = 0;
+  exam.questions.forEach((q, i) => { totalMarks += q.marks; if (answers[i] === q.correctAnswer) score += q.marks; });
+  const percentage = (score / totalMarks) * 100;
+  res.json(await Result.create({ student: req.user.id, exam: exam._id, answers, score, totalMarks, percentage }));
+});
+
+app.get('/api/results', auth, async (req, res) => {
+  const filter = req.user.role === 'student' ? { student: req.user.id } : {};
+  res.json(await Result.find(filter).populate('student exam'));
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+const getToken = () => ({ headers: { Authorization: \`Bearer \${localStorage.getItem('token')}\` } });
+
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student' });
+  const handle = async (e) => {
+    e.preventDefault();
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); alert('Registered!'); }
+  };
+  return (<form onSubmit={handle}>
+    <h2>{isLogin ? 'Login' : 'Register'}</h2>
+    {!isLogin && <input placeholder="Name" onChange={e => setForm({...form, name: e.target.value})} />}
+    <input placeholder="Email" onChange={e => setForm({...form, email: e.target.value})} />
+    <input type="password" placeholder="Password" onChange={e => setForm({...form, password: e.target.value})} />
+    {!isLogin && <select onChange={e => setForm({...form, role: e.target.value})}><option value="student">Student</option><option value="teacher">Teacher</option></select>}
+    <button type="submit">{isLogin ? 'Login' : 'Register'}</button>
+    <button type="button" onClick={() => setIsLogin(!isLogin)}>Switch</button>
+  </form>);
+}
+
+function CreateExam() {
+  const [form, setForm] = useState({ title: '', description: '', duration: 30, questions: [{ question: '', options: ['', '', '', ''], correctAnswer: 0, marks: 1 }] });
+  const addQuestion = () => setForm({ ...form, questions: [...form.questions, { question: '', options: ['', '', '', ''], correctAnswer: 0, marks: 1 }] });
+  const updateQ = (idx, field, val) => { const qs = [...form.questions]; qs[idx][field] = val; setForm({ ...form, questions: qs }); };
+  const updateOption = (qi, oi, val) => { const qs = [...form.questions]; qs[qi].options[oi] = val; setForm({ ...form, questions: qs }); };
+  const submit = async (e) => { e.preventDefault(); await axios.post(\`\${API}/exams\`, form, getToken()); alert('Created!'); };
+  return (<form onSubmit={submit}>
+    <h2>Create Exam</h2>
+    <input placeholder="Title" onChange={e => setForm({...form, title: e.target.value})} />
+    <input type="number" placeholder="Duration" value={form.duration} onChange={e => setForm({...form, duration: +e.target.value})} />
+    {form.questions.map((q, qi) => <div key={qi} style={{border:'1px solid #ccc',padding:8,margin:4}}>
+      <input placeholder="Question" value={q.question} onChange={e => updateQ(qi, 'question', e.target.value)} />
+      {q.options.map((o, oi) => <input key={oi} placeholder={\`Option \${oi+1}\`} value={o} onChange={e => updateOption(qi, oi, e.target.value)} />)}
+      <select value={q.correctAnswer} onChange={e => updateQ(qi, 'correctAnswer', +e.target.value)}>{[0,1,2,3].map(i => <option key={i} value={i}>Correct: {i+1}</option>)}</select>
+    </div>)}
+    <button type="button" onClick={addQuestion}>+ Question</button>
+    <button type="submit">Create</button>
+  </form>);
+}
+
+function TakeExam() {
+  const [exams, setExams] = useState([]);
+  const [current, setCurrent] = useState(null);
+  const [answers, setAnswers] = useState([]);
+  const [result, setResult] = useState(null);
+  useEffect(() => { axios.get(\`\${API}/exams\`).then(r => setExams(r.data)); }, []);
+  const startExam = async (id) => { const { data } = await axios.get(\`\${API}/exams/\${id}\`, getToken()); setCurrent(data); setAnswers(new Array(data.questions.length).fill(-1)); };
+  const submitExam = async () => { const { data } = await axios.post(\`\${API}/exams/\${current._id}/submit\`, { answers }, getToken()); setResult(data); setCurrent(null); };
+  if (result) return <div><h2>Result</h2><p>Score: {result.score}/{result.totalMarks} ({result.percentage.toFixed(1)}%)</p><button onClick={() => setResult(null)}>Back</button></div>;
+  if (current) return (<div><h2>{current.title}</h2>
+    {current.questions.map((q, qi) => <div key={qi} style={{margin:8}}>
+      <p><strong>Q{qi+1}: {q.question}</strong></p>
+      {q.options.map((o, oi) => <label key={oi} style={{display:'block'}}><input type="radio" name={\`q\${qi}\`} checked={answers[qi]===oi} onChange={() => { const a=[...answers]; a[qi]=oi; setAnswers(a); }} /> {o}</label>)}
+    </div>)}
+    <button onClick={submitExam}>Submit</button>
+  </div>);
+  return (<div><h2>Exams</h2>{exams.map(e => <div key={e._id}>{e.title} <button onClick={() => startExam(e._id)}>Start</button></div>)}</div>);
+}
+
+function Results() {
+  const [results, setResults] = useState([]);
+  useEffect(() => { axios.get(\`\${API}/results\`, getToken()).then(r => setResults(r.data)); }, []);
+  return (<div><h2>Results</h2>
+    <table><thead><tr><th>Exam</th><th>Student</th><th>Score</th><th>%</th></tr></thead>
+    <tbody>{results.map(r => <tr key={r._id}><td>{r.exam?.title}</td><td>{r.student?.name}</td><td>{r.score}/{r.totalMarks}</td><td>{r.percentage?.toFixed(1)}%</td></tr>)}</tbody></table>
+  </div>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState('exams');
+  if (!user) return <Auth onLogin={setUser} />;
+  return (<div>
+    <nav>{user.role === 'teacher' && <button onClick={() => setPage('create')}>Create</button>}
+    <button onClick={() => setPage('exams')}>Exams</button><button onClick={() => setPage('results')}>Results</button>
+    <button onClick={() => { localStorage.removeItem('token'); setUser(null); }}>Logout</button></nav>
+    {page === 'create' && <CreateExam />}
+    {page === 'exams' && <TakeExam />}
+    {page === 'results' && <Results />}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/examination
+JWT_SECRET=examsecret123
+PORT=5000
+
+// ========== package.json ==========
+{ "name": "exam-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// ASSIGNMENT 4 - LIBRARY MANAGEMENT SYSTEM (MERN)
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/library');
+
+const UserSchema = new mongoose.Schema({
+  name: String, email: String, password: String,
+  role: { type: String, enum: ['student', 'librarian'], default: 'student' }
+});
+const User = mongoose.model('User', UserSchema);
+
+const BookSchema = new mongoose.Schema({
+  title: String, author: String, isbn: String, category: String,
+  totalCopies: { type: Number, default: 1 }, availableCopies: { type: Number, default: 1 }
+});
+const Book = mongoose.model('Book', BookSchema);
+
+const IssueSchema = new mongoose.Schema({
+  book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book' },
+  student: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  issueDate: { type: Date, default: Date.now }, returnDate: Date, dueDate: Date,
+  status: { type: String, default: 'issued', enum: ['issued', 'returned'] }
+});
+const Issue = mongoose.model('Issue', IssueSchema);
+
+const auth = (req, res, next) => {
+  try { req.user = jwt.verify(req.headers.authorization.split(' ')[1], 'secret'); next(); }
+  catch(e) { res.status(401).json({ error: 'Unauthorized' }); }
+};
+
+app.post('/api/register', async (req, res) => { const hash = await bcrypt.hash(req.body.password, 10); res.json(await User.create({ ...req.body, password: hash })); });
+app.post('/api/login', async (req, res) => {
+  const user = await User.findOne({ email: req.body.email });
+  if (!user || !(await bcrypt.compare(req.body.password, user.password))) return res.status(401).json({ error: 'Invalid' });
+  res.json({ token: jwt.sign({ id: user._id, role: user.role, name: user.name }, 'secret'), user: { id: user._id, name: user.name, role: user.role } });
+});
+
+app.get('/api/books', async (req, res) => {
+  const { search } = req.query;
+  const filter = search ? { $or: [{ title: new RegExp(search, 'i') }, { author: new RegExp(search, 'i') }] } : {};
+  res.json(await Book.find(filter));
+});
+app.post('/api/books', auth, async (req, res) => res.json(await Book.create(req.body)));
+app.put('/api/books/:id', auth, async (req, res) => res.json(await Book.findByIdAndUpdate(req.params.id, req.body, { new: true })));
+app.delete('/api/books/:id', auth, async (req, res) => { await Book.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.post('/api/issues', auth, async (req, res) => {
+  const book = await Book.findById(req.body.book);
+  if (book.availableCopies < 1) return res.status(400).json({ error: 'No copies' });
+  const dueDate = new Date(); dueDate.setDate(dueDate.getDate() + 14);
+  const issue = await Issue.create({ ...req.body, student: req.body.student || req.user.id, dueDate });
+  await Book.findByIdAndUpdate(req.body.book, { $inc: { availableCopies: -1 } });
+  res.json(issue);
+});
+app.put('/api/issues/:id/return', auth, async (req, res) => {
+  const issue = await Issue.findByIdAndUpdate(req.params.id, { status: 'returned', returnDate: new Date() }, { new: true });
+  await Book.findByIdAndUpdate(issue.book, { $inc: { availableCopies: 1 } });
+  res.json(issue);
+});
+app.get('/api/issues', auth, async (req, res) => {
+  const filter = req.user.role === 'student' ? { student: req.user.id } : {};
+  res.json(await Issue.find(filter).populate('book student'));
+});
+app.get('/api/students', auth, async (req, res) => res.json(await User.find({ role: 'student' }).select('-password')));
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+const getToken = () => ({ headers: { Authorization: \`Bearer \${localStorage.getItem('token')}\` } });
+
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student' });
+  const handle = async (e) => {
+    e.preventDefault();
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); }
+  };
+  return (<form onSubmit={handle}>
+    <h2>{isLogin ? 'Login' : 'Register'}</h2>
+    {!isLogin && <input placeholder="Name" onChange={e => setForm({...form, name: e.target.value})} />}
+    <input placeholder="Email" onChange={e => setForm({...form, email: e.target.value})} />
+    <input type="password" placeholder="Password" onChange={e => setForm({...form, password: e.target.value})} />
+    {!isLogin && <select onChange={e => setForm({...form, role: e.target.value})}><option value="student">Student</option><option value="librarian">Librarian</option></select>}
+    <button type="submit">{isLogin ? 'Login' : 'Register'}</button>
+    <button type="button" onClick={() => setIsLogin(!isLogin)}>Switch</button>
+  </form>);
+}
+
+function Books({ user }) {
+  const [books, setBooks] = useState([]);
+  const [search, setSearch] = useState('');
+  const [form, setForm] = useState({ title: '', author: '', isbn: '', category: '', totalCopies: 1 });
+  useEffect(() => { axios.get(\`\${API}/books?search=\${search}\`).then(r => setBooks(r.data)); }, [search]);
+  const addBook = async (e) => { e.preventDefault(); await axios.post(\`\${API}/books\`, { ...form, availableCopies: form.totalCopies }, getToken()); };
+  return (<div><h2>Books</h2>
+    <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
+    {user.role === 'librarian' && <form onSubmit={addBook}>
+      <input placeholder="Title" onChange={e => setForm({...form, title: e.target.value})} />
+      <input placeholder="Author" onChange={e => setForm({...form, author: e.target.value})} />
+      <input placeholder="ISBN" onChange={e => setForm({...form, isbn: e.target.value})} />
+      <button type="submit">Add</button>
+    </form>}
+    <table><thead><tr><th>Title</th><th>Author</th><th>ISBN</th><th>Available</th></tr></thead>
+    <tbody>{books.map(b => <tr key={b._id}><td>{b.title}</td><td>{b.author}</td><td>{b.isbn}</td><td>{b.availableCopies}/{b.totalCopies}</td></tr>)}</tbody></table>
+  </div>);
+}
+
+function Issues({ user }) {
+  const [issues, setIssues] = useState([]);
+  const [books, setBooks] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [form, setForm] = useState({ book: '', student: '' });
+  useEffect(() => { fetchAll(); }, []);
+  const fetchAll = async () => {
+    const [i, b] = await Promise.all([axios.get(\`\${API}/issues\`, getToken()), axios.get(\`\${API}/books\`)]);
+    setIssues(i.data); setBooks(b.data);
+    if (user.role === 'librarian') { const s = await axios.get(\`\${API}/students\`, getToken()); setStudents(s.data); }
+  };
+  const issueBook = async (e) => { e.preventDefault(); await axios.post(\`\${API}/issues\`, form, getToken()); fetchAll(); };
+  const returnBook = async (id) => { await axios.put(\`\${API}/issues/\${id}/return\`, {}, getToken()); fetchAll(); };
+  return (<div><h2>Issues</h2>
+    {user.role === 'librarian' && <form onSubmit={issueBook}>
+      <select onChange={e => setForm({...form, book: e.target.value})}><option value="">Book</option>{books.filter(b => b.availableCopies > 0).map(b => <option key={b._id} value={b._id}>{b.title}</option>)}</select>
+      <select onChange={e => setForm({...form, student: e.target.value})}><option value="">Student</option>{students.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}</select>
+      <button type="submit">Issue</button>
+    </form>}
+    <table><thead><tr><th>Book</th><th>Student</th><th>Due</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody>{issues.map(i => <tr key={i._id}><td>{i.book?.title}</td><td>{i.student?.name}</td><td>{new Date(i.dueDate).toLocaleDateString()}</td><td>{i.status}</td>
+    <td>{i.status === 'issued' && user.role === 'librarian' && <button onClick={() => returnBook(i._id)}>Return</button>}</td></tr>)}</tbody></table>
+  </div>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState('books');
+  if (!user) return <Auth onLogin={setUser} />;
+  return (<div>
+    <nav><button onClick={() => setPage('books')}>Books</button><button onClick={() => setPage('issues')}>Issues</button>
+    <button onClick={() => { localStorage.removeItem('token'); setUser(null); }}>Logout</button></nav>
+    {page === 'books' && <Books user={user} />}
+    {page === 'issues' && <Issues user={user} />}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/library
+JWT_SECRET=librarysecret
+PORT=5000
+
+// ========== package.json ==========
+{ "name": "library-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// ASSIGNMENT 5 - HOTEL ROOM BOOKING SYSTEM
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/hotel');
+
+const UserSchema = new mongoose.Schema({ name: String, email: String, password: String, role: { type: String, enum: ['guest', 'admin'], default: 'guest' } });
+const User = mongoose.model('User', UserSchema);
+
+const RoomSchema = new mongoose.Schema({ roomNumber: String, type: { type: String, enum: ['single', 'double', 'suite', 'deluxe'] }, price: Number, maxGuests: Number, isAvailable: { type: Boolean, default: true } });
+const Room = mongoose.model('Room', RoomSchema);
+
+const BookingSchema = new mongoose.Schema({
+  room: { type: mongoose.Schema.Types.ObjectId, ref: 'Room' }, guest: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  checkIn: Date, checkOut: Date, totalAmount: Number, paymentStatus: { type: String, default: 'pending' },
+  status: { type: String, default: 'confirmed', enum: ['confirmed', 'checked-in', 'checked-out', 'cancelled'] }, createdAt: { type: Date, default: Date.now }
+});
+const Booking = mongoose.model('Booking', BookingSchema);
+
+const auth = (req, res, next) => { try { req.user = jwt.verify(req.headers.authorization.split(' ')[1], 'secret'); next(); } catch(e) { res.status(401).json({ error: 'Unauthorized' }); } };
+
+app.post('/api/register', async (req, res) => { const hash = await bcrypt.hash(req.body.password, 10); res.json(await User.create({ ...req.body, password: hash })); });
+app.post('/api/login', async (req, res) => {
+  const user = await User.findOne({ email: req.body.email });
+  if (!user || !(await bcrypt.compare(req.body.password, user.password))) return res.status(401).json({ error: 'Invalid' });
+  res.json({ token: jwt.sign({ id: user._id, role: user.role, name: user.name }, 'secret'), user: { id: user._id, name: user.name, role: user.role } });
+});
+
+app.get('/api/rooms', async (req, res) => {
+  const { checkIn, checkOut, type } = req.query;
+  let filter = {}; if (type) filter.type = type;
+  let rooms = await Room.find(filter);
+  if (checkIn && checkOut) {
+    const booked = await Booking.find({ status: { $ne: 'cancelled' }, $or: [{ checkIn: { $lte: new Date(checkOut) }, checkOut: { $gte: new Date(checkIn) } }] }).distinct('room');
+    rooms = rooms.filter(r => !booked.some(b => b.equals(r._id)));
+  }
+  res.json(rooms);
+});
+app.post('/api/rooms', auth, async (req, res) => res.json(await Room.create(req.body)));
+
+app.post('/api/bookings', auth, async (req, res) => {
+  const room = await Room.findById(req.body.room);
+  const days = Math.ceil((new Date(req.body.checkOut) - new Date(req.body.checkIn)) / 86400000);
+  res.json(await Booking.create({ ...req.body, guest: req.user.id, totalAmount: room.price * days }));
+});
+app.get('/api/bookings', auth, async (req, res) => {
+  const filter = req.user.role === 'guest' ? { guest: req.user.id } : {};
+  res.json(await Booking.find(filter).populate('room guest').sort({ createdAt: -1 }));
+});
+app.put('/api/bookings/:id/pay', auth, async (req, res) => res.json(await Booking.findByIdAndUpdate(req.params.id, { paymentStatus: 'paid' }, { new: true })));
+app.put('/api/bookings/:id/cancel', auth, async (req, res) => res.json(await Booking.findByIdAndUpdate(req.params.id, { status: 'cancelled' }, { new: true })));
+
+app.get('/api/dashboard', auth, async (req, res) => {
+  const totalRooms = await Room.countDocuments();
+  const totalBookings = await Booking.countDocuments({ status: { $ne: 'cancelled' } });
+  const rev = await Booking.aggregate([{ $match: { paymentStatus: 'paid' } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]);
+  res.json({ totalRooms, totalBookings, revenue: rev[0]?.total || 0 });
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+const getToken = () => ({ headers: { Authorization: \`Bearer \${localStorage.getItem('token')}\` } });
+
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'guest' });
+  const handle = async (e) => { e.preventDefault();
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); }
+  };
+  return (<form onSubmit={handle}><h2>{isLogin?'Login':'Register'}</h2>
+    {!isLogin && <input placeholder="Name" onChange={e=>setForm({...form,name:e.target.value})}/>}
+    <input placeholder="Email" onChange={e=>setForm({...form,email:e.target.value})}/>
+    <input type="password" placeholder="Password" onChange={e=>setForm({...form,password:e.target.value})}/>
+    {!isLogin && <select onChange={e=>setForm({...form,role:e.target.value})}><option value="guest">Guest</option><option value="admin">Admin</option></select>}
+    <button type="submit">{isLogin?'Login':'Register'}</button><button type="button" onClick={()=>setIsLogin(!isLogin)}>Switch</button>
+  </form>);
+}
+
+function RoomSearch() {
+  const [rooms, setRooms] = useState([]);
+  const [f, setF] = useState({ checkIn: '', checkOut: '', type: '' });
+  const search = async () => { const { data } = await axios.get(\`\${API}/rooms?\${new URLSearchParams(f)}\`); setRooms(data); };
+  useEffect(() => { search(); }, []);
+  const book = async (id) => { if (!f.checkIn||!f.checkOut) return alert('Select dates'); await axios.post(\`\${API}/bookings\`, { room: id, checkIn: f.checkIn, checkOut: f.checkOut }, getToken()); alert('Booked!'); };
+  return (<div><h2>Rooms</h2>
+    <input type="date" onChange={e=>setF({...f,checkIn:e.target.value})}/> to <input type="date" onChange={e=>setF({...f,checkOut:e.target.value})}/>
+    <select onChange={e=>setF({...f,type:e.target.value})}><option value="">All</option><option>single</option><option>double</option><option>suite</option><option>deluxe</option></select>
+    <button onClick={search}>Search</button>
+    <table><thead><tr><th>Room</th><th>Type</th><th>Price</th><th>Action</th></tr></thead>
+    <tbody>{rooms.map(r=><tr key={r._id}><td>{r.roomNumber}</td><td>{r.type}</td><td>Rs.{r.price}</td><td><button onClick={()=>book(r._id)}>Book</button></td></tr>)}</tbody></table>
+  </div>);
+}
+
+function MyBookings() {
+  const [bookings, setBookings] = useState([]);
+  useEffect(() => { g(); }, []);
+  const g = async () => { const { data } = await axios.get(\`\${API}/bookings\`, getToken()); setBookings(data); };
+  return (<div><h2>Bookings</h2>
+    <table><thead><tr><th>Room</th><th>In</th><th>Out</th><th>Amount</th><th>Status</th></tr></thead>
+    <tbody>{bookings.map(b=><tr key={b._id}><td>{b.room?.roomNumber}</td><td>{new Date(b.checkIn).toLocaleDateString()}</td><td>{new Date(b.checkOut).toLocaleDateString()}</td><td>Rs.{b.totalAmount}</td><td>{b.status}</td></tr>)}</tbody></table>
+  </div>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState('search');
+  if (!user) return <Auth onLogin={setUser} />;
+  return (<div>
+    <nav><button onClick={()=>setPage('search')}>Rooms</button><button onClick={()=>setPage('bookings')}>Bookings</button>
+    {user.role==='admin'&&<button onClick={()=>setPage('admin')}>Admin</button>}
+    <button onClick={()=>{localStorage.removeItem('token');setUser(null)}}>Logout</button></nav>
+    {page==='search'&&<RoomSearch/>}{page==='bookings'&&<MyBookings/>}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/hotel
+JWT_SECRET=hotelsecret
+PORT=5000
+
+// ========== package.json ==========
+{ "name": "hotel-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// ASSIGNMENT 6 - JOB PORTAL APPLICATION
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+require('dotenv').config();
+
+const app = express();
+app.use(cors()); app.use(express.json()); app.use('/uploads', express.static('uploads'));
+const upload = multer({ dest: 'uploads/' });
+
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/jobportal');
+
+const UserSchema = new mongoose.Schema({ name: String, email: String, password: String, role: { type: String, enum: ['applicant', 'recruiter'], default: 'applicant' }, resume: String, skills: [String], company: String });
+const User = mongoose.model('User', UserSchema);
+
+const JobSchema = new mongoose.Schema({ title: String, description: String, company: String, location: String, salary: String, type: { type: String, enum: ['full-time', 'part-time', 'contract', 'internship'] }, skills: [String], postedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, isActive: { type: Boolean, default: true }, createdAt: { type: Date, default: Date.now } });
+const Job = mongoose.model('Job', JobSchema);
+
+const ApplicationSchema = new mongoose.Schema({ job: { type: mongoose.Schema.Types.ObjectId, ref: 'Job' }, applicant: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, coverLetter: String, status: { type: String, default: 'applied', enum: ['applied', 'reviewing', 'shortlisted', 'rejected', 'hired'] }, appliedAt: { type: Date, default: Date.now } });
+const Application = mongoose.model('Application', ApplicationSchema);
+
+const auth = (req, res, next) => { try { req.user = jwt.verify(req.headers.authorization.split(' ')[1], 'secret'); next(); } catch(e) { res.status(401).json({ error: 'Unauthorized' }); } };
+
+app.post('/api/register', async (req, res) => { const hash = await bcrypt.hash(req.body.password, 10); res.json(await User.create({ ...req.body, password: hash })); });
+app.post('/api/login', async (req, res) => { const user = await User.findOne({ email: req.body.email }); if (!user || !(await bcrypt.compare(req.body.password, user.password))) return res.status(401).json({ error: 'Invalid' }); res.json({ token: jwt.sign({ id: user._id, role: user.role, name: user.name }, 'secret'), user: { id: user._id, name: user.name, role: user.role } }); });
+
+app.post('/api/upload-resume', auth, upload.single('resume'), async (req, res) => { await User.findByIdAndUpdate(req.user.id, { resume: req.file.path }); res.json({ path: req.file.path }); });
+
+app.get('/api/jobs', async (req, res) => { const { search, type } = req.query; let filter = { isActive: true }; if (search) filter.$or = [{ title: new RegExp(search, 'i') }, { company: new RegExp(search, 'i') }]; if (type) filter.type = type; res.json(await Job.find(filter).sort({ createdAt: -1 })); });
+app.post('/api/jobs', auth, async (req, res) => res.json(await Job.create({ ...req.body, postedBy: req.user.id })));
+app.delete('/api/jobs/:id', auth, async (req, res) => { await Job.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.post('/api/applications', auth, async (req, res) => { const existing = await Application.findOne({ job: req.body.job, applicant: req.user.id }); if (existing) return res.status(400).json({ error: 'Already applied' }); res.json(await Application.create({ ...req.body, applicant: req.user.id })); });
+app.get('/api/applications', auth, async (req, res) => { const filter = req.user.role === 'applicant' ? { applicant: req.user.id } : {}; res.json(await Application.find(filter).populate('job applicant')); });
+app.put('/api/applications/:id/status', auth, async (req, res) => res.json(await Application.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true })));
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+const getToken = () => ({ headers: { Authorization: \`Bearer \${localStorage.getItem('token')}\` } });
+
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'applicant' });
+  const handle = async (e) => { e.preventDefault();
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); }
+  };
+  return (<form onSubmit={handle}><h2>{isLogin?'Login':'Register'}</h2>
+    {!isLogin&&<input placeholder="Name" onChange={e=>setForm({...form,name:e.target.value})}/>}
+    <input placeholder="Email" onChange={e=>setForm({...form,email:e.target.value})}/>
+    <input type="password" placeholder="Password" onChange={e=>setForm({...form,password:e.target.value})}/>
+    {!isLogin&&<select onChange={e=>setForm({...form,role:e.target.value})}><option value="applicant">Applicant</option><option value="recruiter">Recruiter</option></select>}
+    <button type="submit">{isLogin?'Login':'Register'}</button><button type="button" onClick={()=>setIsLogin(!isLogin)}>Switch</button>
+  </form>);
+}
+
+function JobList({ user }) {
+  const [jobs, setJobs] = useState([]); const [search, setSearch] = useState('');
+  useEffect(() => { axios.get(\`\${API}/jobs?search=\${search}\`).then(r => setJobs(r.data)); }, [search]);
+  const apply = async (id) => { await axios.post(\`\${API}/applications\`, { job: id }, getToken()); alert('Applied!'); };
+  return (<div><h2>Jobs</h2><input placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)}/>
+    {jobs.map(j=><div key={j._id} style={{border:'1px solid #ccc',padding:8,margin:4}}><h3>{j.title}</h3><p>{j.company} - {j.location} | {j.type} | {j.salary}</p><p>{j.description}</p>
+    {user.role==='applicant'&&<button onClick={()=>apply(j._id)}>Apply</button>}</div>)}</div>);
+}
+
+function PostJob() {
+  const [form, setForm] = useState({ title: '', description: '', company: '', location: '', salary: '', type: 'full-time', skills: '' });
+  const submit = async (e) => { e.preventDefault(); await axios.post(\`\${API}/jobs\`, { ...form, skills: form.skills.split(',') }, getToken()); alert('Posted!'); };
+  return (<form onSubmit={submit}><h2>Post Job</h2>
+    <input placeholder="Title" onChange={e=>setForm({...form,title:e.target.value})}/>
+    <input placeholder="Company" onChange={e=>setForm({...form,company:e.target.value})}/>
+    <input placeholder="Location" onChange={e=>setForm({...form,location:e.target.value})}/>
+    <input placeholder="Salary" onChange={e=>setForm({...form,salary:e.target.value})}/>
+    <textarea placeholder="Description" onChange={e=>setForm({...form,description:e.target.value})}></textarea>
+    <button type="submit">Post</button>
+  </form>);
+}
+
+function Applications({ user }) {
+  const [apps, setApps] = useState([]);
+  useEffect(() => { axios.get(\`\${API}/applications\`, getToken()).then(r => setApps(r.data)); }, []);
+  const updateStatus = async (id, status) => { await axios.put(\`\${API}/applications/\${id}/status\`, { status }, getToken()); };
+  return (<div><h2>Applications</h2>
+    <table><thead><tr><th>Job</th><th>{user.role==='recruiter'?'Applicant':'Company'}</th><th>Status</th>{user.role==='recruiter'&&<th>Action</th>}</tr></thead>
+    <tbody>{apps.map(a=><tr key={a._id}><td>{a.job?.title}</td><td>{user.role==='recruiter'?a.applicant?.name:a.job?.company}</td><td>{a.status}</td>
+    {user.role==='recruiter'&&<td><select value={a.status} onChange={e=>updateStatus(a._id,e.target.value)}><option>applied</option><option>reviewing</option><option>shortlisted</option><option>rejected</option><option>hired</option></select></td>}</tr>)}</tbody></table>
+  </div>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null); const [page, setPage] = useState('jobs');
+  if (!user) return <Auth onLogin={setUser} />;
+  return (<div><nav><button onClick={()=>setPage('jobs')}>Jobs</button>
+    {user.role==='recruiter'&&<button onClick={()=>setPage('post')}>Post</button>}
+    <button onClick={()=>setPage('apps')}>Applications</button>
+    <button onClick={()=>{localStorage.removeItem('token');setUser(null)}}>Logout</button></nav>
+    {page==='jobs'&&<JobList user={user}/>}{page==='post'&&<PostJob/>}{page==='apps'&&<Applications user={user}/>}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/jobportal
+JWT_SECRET=jobsecret
+PORT=5000
+
+// ========== package.json ==========
+{ "name": "jobportal-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "multer": "^1.4.5", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// ASSIGNMENT 7 - E-LEARNING PLATFORM
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+app.use(cors()); app.use(express.json());
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/elearning');
+
+const UserSchema = new mongoose.Schema({ name: String, email: String, password: String, role: { type: String, enum: ['student', 'instructor'], default: 'student' } });
+const User = mongoose.model('User', UserSchema);
+
+const CourseSchema = new mongoose.Schema({ title: String, description: String, instructor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, category: String, price: Number, lectures: [{ title: String, videoUrl: String, order: Number }], quizzes: [{ title: String, questions: [{ question: String, options: [String], correctAnswer: Number }] }], enrolledStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], createdAt: { type: Date, default: Date.now } });
+const Course = mongoose.model('Course', CourseSchema);
+
+const ProgressSchema = new mongoose.Schema({ student: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' }, completedLectures: [Number], percentage: { type: Number, default: 0 } });
+const Progress = mongoose.model('Progress', ProgressSchema);
+
+const auth = (req, res, next) => { try { req.user = jwt.verify(req.headers.authorization.split(' ')[1], 'secret'); next(); } catch(e) { res.status(401).json({ error: 'Unauthorized' }); } };
+
+app.post('/api/register', async (req, res) => { const hash = await bcrypt.hash(req.body.password, 10); res.json(await User.create({ ...req.body, password: hash })); });
+app.post('/api/login', async (req, res) => { const user = await User.findOne({ email: req.body.email }); if (!user || !(await bcrypt.compare(req.body.password, user.password))) return res.status(401).json({ error: 'Invalid' }); res.json({ token: jwt.sign({ id: user._id, role: user.role, name: user.name }, 'secret'), user: { id: user._id, name: user.name, role: user.role } }); });
+
+app.get('/api/courses', async (req, res) => { const { search } = req.query; const filter = search ? { title: new RegExp(search, 'i') } : {}; res.json(await Course.find(filter).populate('instructor', 'name')); });
+app.get('/api/courses/:id', async (req, res) => res.json(await Course.findById(req.params.id).populate('instructor', 'name')));
+app.post('/api/courses', auth, async (req, res) => res.json(await Course.create({ ...req.body, instructor: req.user.id })));
+
+app.post('/api/courses/:id/enroll', auth, async (req, res) => {
+  const course = await Course.findById(req.params.id);
+  if (course.enrolledStudents.includes(req.user.id)) return res.status(400).json({ error: 'Already enrolled' });
+  course.enrolledStudents.push(req.user.id); await course.save();
+  await Progress.create({ student: req.user.id, course: course._id });
+  res.json({ msg: 'Enrolled' });
+});
+app.get('/api/my-courses', auth, async (req, res) => res.json(await Course.find({ enrolledStudents: req.user.id })));
+app.get('/api/progress/:courseId', auth, async (req, res) => res.json(await Progress.findOne({ student: req.user.id, course: req.params.courseId })));
+app.post('/api/progress/:courseId/lecture', auth, async (req, res) => {
+  const progress = await Progress.findOne({ student: req.user.id, course: req.params.courseId });
+  const course = await Course.findById(req.params.courseId);
+  if (!progress.completedLectures.includes(req.body.lectureIndex)) {
+    progress.completedLectures.push(req.body.lectureIndex);
+    progress.percentage = (progress.completedLectures.length / course.lectures.length) * 100;
+    await progress.save();
+  }
+  res.json(progress);
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+const getToken = () => ({ headers: { Authorization: \`Bearer \${localStorage.getItem('token')}\` } });
+
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student' });
+  const handle = async (e) => { e.preventDefault();
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); }
+  };
+  return (<form onSubmit={handle}><h2>{isLogin?'Login':'Register'}</h2>
+    {!isLogin&&<input placeholder="Name" onChange={e=>setForm({...form,name:e.target.value})}/>}
+    <input placeholder="Email" onChange={e=>setForm({...form,email:e.target.value})}/>
+    <input type="password" placeholder="Password" onChange={e=>setForm({...form,password:e.target.value})}/>
+    {!isLogin&&<select onChange={e=>setForm({...form,role:e.target.value})}><option value="student">Student</option><option value="instructor">Instructor</option></select>}
+    <button type="submit">{isLogin?'Login':'Register'}</button><button type="button" onClick={()=>setIsLogin(!isLogin)}>Switch</button>
+  </form>);
+}
+
+function CourseList({ user }) {
+  const [courses, setCourses] = useState([]); const [search, setSearch] = useState('');
+  useEffect(() => { axios.get(\`\${API}/courses?search=\${search}\`).then(r => setCourses(r.data)); }, [search]);
+  const enroll = async (id) => { await axios.post(\`\${API}/courses/\${id}/enroll\`, {}, getToken()); alert('Enrolled!'); };
+  return (<div><h2>Courses</h2><input placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)}/>
+    {courses.map(c=><div key={c._id} style={{border:'1px solid #ccc',padding:8,margin:4}}><h3>{c.title}</h3><p>{c.instructor?.name} | Rs.{c.price}</p><p>{c.lectures?.length||0} lectures</p>
+    {user.role==='student'&&<button onClick={()=>enroll(c._id)}>Enroll</button>}</div>)}</div>);
+}
+
+function MyCourses() {
+  const [courses, setCourses] = useState([]); const [sel, setSel] = useState(null); const [prog, setProg] = useState(null);
+  useEffect(() => { axios.get(\`\${API}/my-courses\`, getToken()).then(r => setCourses(r.data)); }, []);
+  const view = async (c) => { setSel(c); const { data } = await axios.get(\`\${API}/progress/\${c._id}\`, getToken()); setProg(data); };
+  const done = async (i) => { const { data } = await axios.post(\`\${API}/progress/\${sel._id}/lecture\`, { lectureIndex: i }, getToken()); setProg(data); };
+  if (sel) return (<div><button onClick={()=>setSel(null)}>Back</button><h2>{sel.title}</h2><p>Progress: {prog?.percentage?.toFixed(0)||0}%</p>
+    {sel.lectures?.map((l,i)=><div key={i}><span>{prog?.completedLectures?.includes(i)?'Done':'Pending'} {l.title}</span><button onClick={()=>done(i)}>Complete</button></div>)}</div>);
+  return (<div><h2>My Courses</h2>{courses.map(c=><div key={c._id}>{c.title} <button onClick={()=>view(c)}>Open</button></div>)}</div>);
+}
+
+function CreateCourse() {
+  const [form, setForm] = useState({ title: '', description: '', category: '', price: 0, lectures: [{ title: '', videoUrl: '', order: 0 }] });
+  const addL = () => setForm({ ...form, lectures: [...form.lectures, { title: '', videoUrl: '', order: form.lectures.length }] });
+  const upL = (i, f, v) => { const ls = [...form.lectures]; ls[i][f] = v; setForm({ ...form, lectures: ls }); };
+  const submit = async (e) => { e.preventDefault(); await axios.post(\`\${API}/courses\`, form, getToken()); alert('Created!'); };
+  return (<form onSubmit={submit}><h2>Create Course</h2>
+    <input placeholder="Title" onChange={e=>setForm({...form,title:e.target.value})}/>
+    <textarea placeholder="Description" onChange={e=>setForm({...form,description:e.target.value})}></textarea>
+    <input type="number" placeholder="Price" onChange={e=>setForm({...form,price:+e.target.value})}/>
+    {form.lectures.map((l,i)=><div key={i}><input placeholder="Lecture" value={l.title} onChange={e=>upL(i,'title',e.target.value)}/><input placeholder="URL" value={l.videoUrl} onChange={e=>upL(i,'videoUrl',e.target.value)}/></div>)}
+    <button type="button" onClick={addL}>+ Lecture</button><button type="submit">Create</button>
+  </form>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null); const [page, setPage] = useState('courses');
+  if (!user) return <Auth onLogin={setUser} />;
+  return (<div><nav><button onClick={()=>setPage('courses')}>Courses</button>
+    {user.role==='student'&&<button onClick={()=>setPage('my')}>My Courses</button>}
+    {user.role==='instructor'&&<button onClick={()=>setPage('create')}>Create</button>}
+    <button onClick={()=>{localStorage.removeItem('token');setUser(null)}}>Logout</button></nav>
+    {page==='courses'&&<CourseList user={user}/>}{page==='my'&&<MyCourses/>}{page==='create'&&<CreateCourse/>}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/elearning
+JWT_SECRET=elearnsecret
+PORT=5000
+
+// ========== package.json ==========
+{ "name": "elearning-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// ASSIGNMENT 8 - VEHICLE RENTAL MANAGEMENT SYSTEM
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+app.use(cors()); app.use(express.json());
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/vehiclerental');
+
+const UserSchema = new mongoose.Schema({ name: String, email: String, password: String, phone: String, license: String, role: { type: String, enum: ['customer', 'admin'], default: 'customer' } });
+const User = mongoose.model('User', UserSchema);
+
+const VehicleSchema = new mongoose.Schema({ make: String, model: String, year: Number, type: { type: String, enum: ['car', 'suv', 'van', 'bike', 'truck'] }, registration: String, pricePerDay: Number, seats: Number, isAvailable: { type: Boolean, default: true } });
+const Vehicle = mongoose.model('Vehicle', VehicleSchema);
+
+const RentalSchema = new mongoose.Schema({ vehicle: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle' }, customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, startDate: Date, endDate: Date, totalDays: Number, totalAmount: Number, status: { type: String, default: 'active', enum: ['active', 'completed', 'cancelled'] }, createdAt: { type: Date, default: Date.now } });
+const Rental = mongoose.model('Rental', RentalSchema);
+
+const auth = (req, res, next) => { try { req.user = jwt.verify(req.headers.authorization.split(' ')[1], 'secret'); next(); } catch(e) { res.status(401).json({ error: 'Unauthorized' }); } };
+
+app.post('/api/register', async (req, res) => { const hash = await bcrypt.hash(req.body.password, 10); res.json(await User.create({ ...req.body, password: hash })); });
+app.post('/api/login', async (req, res) => { const user = await User.findOne({ email: req.body.email }); if (!user || !(await bcrypt.compare(req.body.password, user.password))) return res.status(401).json({ error: 'Invalid' }); res.json({ token: jwt.sign({ id: user._id, role: user.role, name: user.name }, 'secret'), user: { id: user._id, name: user.name, role: user.role } }); });
+
+app.get('/api/vehicles', async (req, res) => { const { type, available } = req.query; let filter = {}; if (type) filter.type = type; if (available==='true') filter.isAvailable = true; res.json(await Vehicle.find(filter)); });
+app.post('/api/vehicles', auth, async (req, res) => res.json(await Vehicle.create(req.body)));
+app.delete('/api/vehicles/:id', auth, async (req, res) => { await Vehicle.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.post('/api/rentals', auth, async (req, res) => {
+  const vehicle = await Vehicle.findById(req.body.vehicle);
+  if (!vehicle.isAvailable) return res.status(400).json({ error: 'Not available' });
+  const totalDays = Math.ceil((new Date(req.body.endDate) - new Date(req.body.startDate)) / 86400000);
+  await Vehicle.findByIdAndUpdate(req.body.vehicle, { isAvailable: false });
+  res.json(await Rental.create({ ...req.body, customer: req.user.id, totalDays, totalAmount: totalDays * vehicle.pricePerDay }));
+});
+app.get('/api/rentals', auth, async (req, res) => { const filter = req.user.role === 'customer' ? { customer: req.user.id } : {}; res.json(await Rental.find(filter).populate('vehicle customer').sort({ createdAt: -1 })); });
+app.put('/api/rentals/:id/return', auth, async (req, res) => { const r = await Rental.findByIdAndUpdate(req.params.id, { status: 'completed' }, { new: true }); await Vehicle.findByIdAndUpdate(r.vehicle, { isAvailable: true }); res.json(r); });
+app.put('/api/rentals/:id/cancel', auth, async (req, res) => { const r = await Rental.findByIdAndUpdate(req.params.id, { status: 'cancelled' }, { new: true }); await Vehicle.findByIdAndUpdate(r.vehicle, { isAvailable: true }); res.json(r); });
+
+app.get('/api/customers', auth, async (req, res) => res.json(await User.find({ role: 'customer' }).select('-password')));
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+const getToken = () => ({ headers: { Authorization: \`Bearer \${localStorage.getItem('token')}\` } });
+
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', license: '', role: 'customer' });
+  const handle = async (e) => { e.preventDefault();
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); }
+  };
+  return (<form onSubmit={handle}><h2>{isLogin?'Login':'Register'}</h2>
+    {!isLogin&&<><input placeholder="Name" onChange={e=>setForm({...form,name:e.target.value})}/><input placeholder="Phone" onChange={e=>setForm({...form,phone:e.target.value})}/><input placeholder="License" onChange={e=>setForm({...form,license:e.target.value})}/></>}
+    <input placeholder="Email" onChange={e=>setForm({...form,email:e.target.value})}/>
+    <input type="password" placeholder="Password" onChange={e=>setForm({...form,password:e.target.value})}/>
+    <button type="submit">{isLogin?'Login':'Register'}</button><button type="button" onClick={()=>setIsLogin(!isLogin)}>Switch</button>
+  </form>);
+}
+
+function VehicleSearch() {
+  const [vehicles, setVehicles] = useState([]); const [dates, setDates] = useState({ startDate: '', endDate: '' }); const [type, setType] = useState('');
+  useEffect(() => { axios.get(\`\${API}/vehicles?available=true\${type?'&type='+type:''}\`).then(r => setVehicles(r.data)); }, [type]);
+  const rent = async (id) => { if (!dates.startDate||!dates.endDate) return alert('Select dates'); await axios.post(\`\${API}/rentals\`, { vehicle: id, ...dates }, getToken()); alert('Rented!'); };
+  return (<div><h2>Vehicles</h2>
+    <input type="date" onChange={e=>setDates({...dates,startDate:e.target.value})}/> to <input type="date" onChange={e=>setDates({...dates,endDate:e.target.value})}/>
+    <select value={type} onChange={e=>setType(e.target.value)}><option value="">All</option><option>car</option><option>suv</option><option>bike</option><option>truck</option></select>
+    <table><thead><tr><th>Vehicle</th><th>Type</th><th>Price/Day</th><th>Action</th></tr></thead>
+    <tbody>{vehicles.map(v=><tr key={v._id}><td>{v.make} {v.model}</td><td>{v.type}</td><td>Rs.{v.pricePerDay}</td><td><button onClick={()=>rent(v._id)}>Rent</button></td></tr>)}</tbody></table>
+  </div>);
+}
+
+function MyRentals() {
+  const [rentals, setRentals] = useState([]);
+  useEffect(() => { g(); }, []);
+  const g = async () => { const { data } = await axios.get(\`\${API}/rentals\`, getToken()); setRentals(data); };
+  const ret = async (id) => { await axios.put(\`\${API}/rentals/\${id}/return\`, {}, getToken()); g(); };
+  return (<div><h2>Rentals</h2>
+    <table><thead><tr><th>Vehicle</th><th>Start</th><th>End</th><th>Days</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody>{rentals.map(r=><tr key={r._id}><td>{r.vehicle?.make} {r.vehicle?.model}</td><td>{new Date(r.startDate).toLocaleDateString()}</td><td>{new Date(r.endDate).toLocaleDateString()}</td><td>{r.totalDays}</td><td>Rs.{r.totalAmount}</td><td>{r.status}</td>
+    <td>{r.status==='active'&&<button onClick={()=>ret(r._id)}>Return</button>}</td></tr>)}</tbody></table>
+  </div>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null); const [page, setPage] = useState('search');
+  if (!user) return <Auth onLogin={setUser} />;
+  return (<div><nav><button onClick={()=>setPage('search')}>Vehicles</button><button onClick={()=>setPage('rentals')}>Rentals</button>
+    <button onClick={()=>{localStorage.removeItem('token');setUser(null)}}>Logout</button></nav>
+    {page==='search'&&<VehicleSearch/>}{page==='rentals'&&<MyRentals/>}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/vehiclerental
+JWT_SECRET=vehiclesecret
+PORT=5000
+
+// ========== package.json ==========
+{ "name": "vehicle-rental-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// ASSIGNMENT 9 - MOVIE TICKET BOOKING SYSTEM
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+app.use(cors()); app.use(express.json());
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/moviebooking');
+
+const UserSchema = new mongoose.Schema({ name: String, email: String, password: String, role: { type: String, enum: ['user', 'admin'], default: 'user' } });
+const User = mongoose.model('User', UserSchema);
+
+const MovieSchema = new mongoose.Schema({ title: String, genre: String, duration: Number, language: String, rating: Number, description: String, shows: [{ date: Date, time: String, screen: String, price: Number, totalSeats: { type: Number, default: 100 }, bookedSeats: [String] }] });
+const Movie = mongoose.model('Movie', MovieSchema);
+
+const BookingSchema = new mongoose.Schema({ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, movie: { type: mongoose.Schema.Types.ObjectId, ref: 'Movie' }, showIndex: Number, seats: [String], totalAmount: Number, bookingDate: { type: Date, default: Date.now } });
+const Booking = mongoose.model('Booking', BookingSchema);
+
+const auth = (req, res, next) => { try { req.user = jwt.verify(req.headers.authorization.split(' ')[1], 'secret'); next(); } catch(e) { res.status(401).json({ error: 'Unauthorized' }); } };
+
+app.post('/api/register', async (req, res) => { const hash = await bcrypt.hash(req.body.password, 10); res.json(await User.create({ ...req.body, password: hash })); });
+app.post('/api/login', async (req, res) => { const user = await User.findOne({ email: req.body.email }); if (!user || !(await bcrypt.compare(req.body.password, user.password))) return res.status(401).json({ error: 'Invalid' }); res.json({ token: jwt.sign({ id: user._id, role: user.role, name: user.name }, 'secret'), user: { id: user._id, name: user.name, role: user.role } }); });
+
+app.get('/api/movies', async (req, res) => { const { search } = req.query; const filter = search ? { title: new RegExp(search, 'i') } : {}; res.json(await Movie.find(filter)); });
+app.get('/api/movies/:id', async (req, res) => res.json(await Movie.findById(req.params.id)));
+app.post('/api/movies', auth, async (req, res) => res.json(await Movie.create(req.body)));
+
+app.get('/api/movies/:id/shows/:showIdx/seats', async (req, res) => {
+  const movie = await Movie.findById(req.params.id);
+  const show = movie.shows[req.params.showIdx];
+  const rows = ['A','B','C','D','E','F','G','H'];
+  const allSeats = [];
+  rows.forEach(r => { for (let i=1; i<=12; i++) allSeats.push({ id: r+i, booked: show.bookedSeats.includes(r+i) }); });
+  res.json({ seats: allSeats, price: show.price });
+});
+
+app.post('/api/bookings', auth, async (req, res) => {
+  const { movieId, showIndex, seats } = req.body;
+  const movie = await Movie.findById(movieId);
+  const show = movie.shows[showIndex];
+  const taken = seats.filter(s => show.bookedSeats.includes(s));
+  if (taken.length) return res.status(400).json({ error: 'Seats taken: ' + taken.join(', ') });
+  movie.shows[showIndex].bookedSeats.push(...seats); await movie.save();
+  res.json(await Booking.create({ user: req.user.id, movie: movieId, showIndex, seats, totalAmount: seats.length * show.price }));
+});
+
+app.get('/api/bookings', auth, async (req, res) => res.json(await Booking.find({ user: req.user.id }).populate('movie').sort({ bookingDate: -1 })));
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+const getToken = () => ({ headers: { Authorization: \`Bearer \${localStorage.getItem('token')}\` } });
+
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const handle = async (e) => { e.preventDefault();
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); }
+  };
+  return (<form onSubmit={handle}><h2>{isLogin?'Login':'Register'}</h2>
+    {!isLogin&&<input placeholder="Name" onChange={e=>setForm({...form,name:e.target.value})}/>}
+    <input placeholder="Email" onChange={e=>setForm({...form,email:e.target.value})}/>
+    <input type="password" placeholder="Password" onChange={e=>setForm({...form,password:e.target.value})}/>
+    <button type="submit">{isLogin?'Login':'Register'}</button><button type="button" onClick={()=>setIsLogin(!isLogin)}>Switch</button>
+  </form>);
+}
+
+function MovieList({ onSelect }) {
+  const [movies, setMovies] = useState([]); const [search, setSearch] = useState('');
+  useEffect(() => { axios.get(\`\${API}/movies?search=\${search}\`).then(r => setMovies(r.data)); }, [search]);
+  return (<div><h2>Movies</h2><input placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)}/>
+    {movies.map(m=><div key={m._id} style={{border:'1px solid #ccc',padding:8,margin:4}}><h3>{m.title}</h3><p>{m.genre} | {m.duration}min | {m.language} | Rating:{m.rating}</p>
+    <button onClick={()=>onSelect(m)}>Book</button></div>)}</div>);
+}
+
+function SeatSelection({ movie, onBack }) {
+  const [showIdx, setShowIdx] = useState(0);
+  const [seats, setSeats] = useState([]); const [sel, setSel] = useState([]); const [info, setInfo] = useState({});
+  useEffect(() => { if (movie.shows?.length) load(0); }, []);
+  const load = async (i) => { setShowIdx(i); setSel([]); const { data } = await axios.get(\`\${API}/movies/\${movie._id}/shows/\${i}/seats\`); setSeats(data.seats); setInfo(data); };
+  const toggle = (id) => setSel(p => p.includes(id) ? p.filter(s=>s!==id) : [...p, id]);
+  const book = async () => { if (!sel.length) return alert('Select seats'); await axios.post(\`\${API}/bookings\`, { movieId: movie._id, showIndex: showIdx, seats: sel }, getToken()); alert('Booked!'); onBack(); };
+  return (<div><button onClick={onBack}>Back</button><h2>{movie.title}</h2>
+    <div>{movie.shows?.map((s,i)=><button key={i} onClick={()=>load(i)} style={{background:i===showIdx?'#0f0':'#333',color:'#fff'}}>{s.time}</button>)}</div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(12,28px)',gap:3}}>
+      {seats.map(s=><button key={s.id} disabled={s.booked} onClick={()=>toggle(s.id)} style={{background:s.booked?'#555':sel.includes(s.id)?'#0f0':'#333',color:'#fff',padding:3,fontSize:9,border:'1px solid #666'}}>{s.id}</button>)}
+    </div>
+    <p>Selected: {sel.join(', ')} | Rs.{sel.length*(info.price||0)}</p><button onClick={book}>Confirm</button>
+  </div>);
+}
+
+function BookingHistory() {
+  const [bookings, setBookings] = useState([]);
+  useEffect(() => { axios.get(\`\${API}/bookings\`, getToken()).then(r => setBookings(r.data)); }, []);
+  return (<div><h2>Bookings</h2>{bookings.map(b=><div key={b._id} style={{border:'1px solid #ccc',padding:8,margin:4}}>
+    <h3>{b.movie?.title}</h3><p>Seats: {b.seats?.join(', ')} | Rs.{b.totalAmount}</p></div>)}</div>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null); const [page, setPage] = useState('movies'); const [sel, setSel] = useState(null);
+  if (!user) return <Auth onLogin={setUser} />;
+  if (sel) return <SeatSelection movie={sel} onBack={()=>{setSel(null);setPage('movies')}}/>;
+  return (<div><nav><button onClick={()=>setPage('movies')}>Movies</button><button onClick={()=>setPage('history')}>Bookings</button>
+    <button onClick={()=>{localStorage.removeItem('token');setUser(null)}}>Logout</button></nav>
+    {page==='movies'&&<MovieList onSelect={setSel}/>}{page==='history'&&<BookingHistory/>}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/moviebooking
+JWT_SECRET=moviesecret
+PORT=5000
+
+// ========== package.json ==========
+{ "name": "movie-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" } }
+
+
+// ============================================================
+// ASSIGNMENT 10 - COLLEGE EVENT MANAGEMENT SYSTEM
+// ============================================================
+
+// ========== server.js ==========
+
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+app.use(cors()); app.use(express.json());
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/eventmanagement');
+
+const UserSchema = new mongoose.Schema({ name: String, email: String, password: String, studentId: String, department: String, role: { type: String, enum: ['student', 'organizer', 'admin'], default: 'student' } });
+const User = mongoose.model('User', UserSchema);
+
+const EventSchema = new mongoose.Schema({ title: String, description: String, category: String, date: Date, time: String, venue: String, maxParticipants: Number, organizer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], status: { type: String, default: 'upcoming', enum: ['upcoming', 'ongoing', 'completed', 'cancelled'] }, createdAt: { type: Date, default: Date.now } });
+const Event = mongoose.model('Event', EventSchema);
+
+const AttendanceSchema = new mongoose.Schema({ event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' }, student: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, checkedIn: { type: Boolean, default: false }, checkInTime: Date });
+const Attendance = mongoose.model('Attendance', AttendanceSchema);
+
+const auth = (req, res, next) => { try { req.user = jwt.verify(req.headers.authorization.split(' ')[1], 'secret'); next(); } catch(e) { res.status(401).json({ error: 'Unauthorized' }); } };
+
+app.post('/api/register', async (req, res) => { const hash = await bcrypt.hash(req.body.password, 10); res.json(await User.create({ ...req.body, password: hash })); });
+app.post('/api/login', async (req, res) => { const user = await User.findOne({ email: req.body.email }); if (!user || !(await bcrypt.compare(req.body.password, user.password))) return res.status(401).json({ error: 'Invalid' }); res.json({ token: jwt.sign({ id: user._id, role: user.role, name: user.name }, 'secret'), user: { id: user._id, name: user.name, role: user.role } }); });
+
+app.get('/api/events', async (req, res) => { const { category } = req.query; const filter = category ? { category } : {}; res.json(await Event.find(filter).populate('organizer', 'name').sort({ date: 1 })); });
+app.get('/api/events/:id', async (req, res) => res.json(await Event.findById(req.params.id).populate('organizer participants', 'name email studentId')));
+app.post('/api/events', auth, async (req, res) => res.json(await Event.create({ ...req.body, organizer: req.user.id })));
+app.put('/api/events/:id', auth, async (req, res) => res.json(await Event.findByIdAndUpdate(req.params.id, req.body, { new: true })));
+app.delete('/api/events/:id', auth, async (req, res) => { await Event.findByIdAndDelete(req.params.id); res.json({ msg: 'Deleted' }); });
+
+app.post('/api/events/:id/register', auth, async (req, res) => {
+  const event = await Event.findById(req.params.id);
+  if (event.participants.includes(req.user.id)) return res.status(400).json({ error: 'Already registered' });
+  if (event.participants.length >= event.maxParticipants) return res.status(400).json({ error: 'Full' });
+  event.participants.push(req.user.id); await event.save();
+  await Attendance.create({ event: event._id, student: req.user.id });
+  res.json({ msg: 'Registered' });
+});
+app.post('/api/events/:id/unregister', auth, async (req, res) => {
+  await Event.findByIdAndUpdate(req.params.id, { $pull: { participants: req.user.id } });
+  await Attendance.deleteOne({ event: req.params.id, student: req.user.id });
+  res.json({ msg: 'Unregistered' });
+});
+
+app.get('/api/events/:id/attendance', auth, async (req, res) => res.json(await Attendance.find({ event: req.params.id }).populate('student', 'name email studentId')));
+app.put('/api/attendance/:id/checkin', auth, async (req, res) => res.json(await Attendance.findByIdAndUpdate(req.params.id, { checkedIn: true, checkInTime: new Date() }, { new: true })));
+
+app.get('/api/my-events', auth, async (req, res) => res.json(await Event.find({ participants: req.user.id })));
+app.get('/api/schedule', async (req, res) => res.json(await Event.find({ status: { $in: ['upcoming', 'ongoing'] } }).select('title date time venue category status').sort({ date: 1 })));
+
+app.get('/api/dashboard', auth, async (req, res) => {
+  const totalEvents = await Event.countDocuments();
+  const upcoming = await Event.countDocuments({ status: 'upcoming' });
+  const totalP = await Attendance.countDocuments();
+  const attended = await Attendance.countDocuments({ checkedIn: true });
+  res.json({ totalEvents, upcoming, totalP, attended });
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+
+// ========== App.jsx ==========
+
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+const API = 'http://localhost:5000/api';
+const getToken = () => ({ headers: { Authorization: \`Bearer \${localStorage.getItem('token')}\` } });
+
+function Auth({ onLogin }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [form, setForm] = useState({ name: '', email: '', password: '', studentId: '', department: '', role: 'student' });
+  const handle = async (e) => { e.preventDefault();
+    if (isLogin) { const { data } = await axios.post(\`\${API}/login\`, form); localStorage.setItem('token', data.token); onLogin(data.user); }
+    else { await axios.post(\`\${API}/register\`, form); setIsLogin(true); }
+  };
+  return (<form onSubmit={handle}><h2>{isLogin?'Login':'Register'}</h2>
+    {!isLogin&&<><input placeholder="Name" onChange={e=>setForm({...form,name:e.target.value})}/><input placeholder="Student ID" onChange={e=>setForm({...form,studentId:e.target.value})}/><input placeholder="Department" onChange={e=>setForm({...form,department:e.target.value})}/>
+    <select onChange={e=>setForm({...form,role:e.target.value})}><option value="student">Student</option><option value="organizer">Organizer</option><option value="admin">Admin</option></select></>}
+    <input placeholder="Email" onChange={e=>setForm({...form,email:e.target.value})}/><input type="password" placeholder="Password" onChange={e=>setForm({...form,password:e.target.value})}/>
+    <button type="submit">{isLogin?'Login':'Register'}</button><button type="button" onClick={()=>setIsLogin(!isLogin)}>Switch</button>
+  </form>);
+}
+
+function EventList({ user }) {
+  const [events, setEvents] = useState([]); const [cat, setCat] = useState('');
+  useEffect(() => { axios.get(\`\${API}/events\${cat?'?category='+cat:''}\`).then(r => setEvents(r.data)); }, [cat]);
+  const reg = async (id) => { await axios.post(\`\${API}/events/\${id}/register\`, {}, getToken()); alert('Registered!'); };
+  const unreg = async (id) => { await axios.post(\`\${API}/events/\${id}/unregister\`, {}, getToken()); alert('Unregistered!'); };
+  return (<div><h2>Events</h2>
+    <select value={cat} onChange={e=>setCat(e.target.value)}><option value="">All</option><option>Technical</option><option>Cultural</option><option>Sports</option><option>Workshop</option></select>
+    {events.map(e=><div key={e._id} style={{border:'1px solid #ccc',padding:8,margin:4}}><h3>{e.title}</h3><p>{e.category} | {new Date(e.date).toLocaleDateString()} {e.time} | {e.venue}</p>
+    <p>{e.participants?.length||0}/{e.maxParticipants} | {e.status}</p>
+    {user.role==='student'&&<><button onClick={()=>reg(e._id)}>Register</button><button onClick={()=>unreg(e._id)}>Unregister</button></>}</div>)}</div>);
+}
+
+function CreateEvent() {
+  const [form, setForm] = useState({ title: '', description: '', category: 'Technical', date: '', time: '', venue: '', maxParticipants: 50 });
+  const submit = async (e) => { e.preventDefault(); await axios.post(\`\${API}/events\`, form, getToken()); alert('Created!'); };
+  return (<form onSubmit={submit}><h2>Create Event</h2>
+    <input placeholder="Title" onChange={e=>setForm({...form,title:e.target.value})}/>
+    <textarea placeholder="Description" onChange={e=>setForm({...form,description:e.target.value})}></textarea>
+    <select onChange={e=>setForm({...form,category:e.target.value})}><option>Technical</option><option>Cultural</option><option>Sports</option><option>Workshop</option></select>
+    <input type="date" onChange={e=>setForm({...form,date:e.target.value})}/><input type="time" onChange={e=>setForm({...form,time:e.target.value})}/>
+    <input placeholder="Venue" onChange={e=>setForm({...form,venue:e.target.value})}/>
+    <input type="number" placeholder="Max" value={form.maxParticipants} onChange={e=>setForm({...form,maxParticipants:+e.target.value})}/>
+    <button type="submit">Create</button>
+  </form>);
+}
+
+function ManageParticipants() {
+  const [events, setEvents] = useState([]); const [sel, setSel] = useState(null); const [att, setAtt] = useState([]);
+  useEffect(() => { axios.get(\`\${API}/events\`).then(r => setEvents(r.data)); }, []);
+  const view = async (id) => { setSel(id); const { data } = await axios.get(\`\${API}/events/\${id}/attendance\`, getToken()); setAtt(data); };
+  const checkIn = async (id) => { await axios.put(\`\${API}/attendance/\${id}/checkin\`, {}, getToken()); view(sel); };
+  return (<div><h2>Manage</h2>
+    {!sel ? events.map(e=><div key={e._id}>{e.title} ({e.participants?.length||0}) <button onClick={()=>view(e._id)}>View</button></div>)
+    : <div><button onClick={()=>setSel(null)}>Back</button>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Checked In</th><th>Action</th></tr></thead>
+      <tbody>{att.map(a=><tr key={a._id}><td>{a.student?.name}</td><td>{a.student?.email}</td><td>{a.checkedIn?'Yes':'No'}</td>
+      <td>{!a.checkedIn&&<button onClick={()=>checkIn(a._id)}>Check In</button>}</td></tr>)}</tbody></table></div>}
+  </div>);
+}
+
+function Schedule() {
+  const [events, setEvents] = useState([]);
+  useEffect(() => { axios.get(\`\${API}/schedule\`).then(r => setEvents(r.data)); }, []);
+  return (<div><h2>Schedule</h2>
+    <table><thead><tr><th>Event</th><th>Date</th><th>Time</th><th>Venue</th><th>Status</th></tr></thead>
+    <tbody>{events.map(e=><tr key={e._id}><td>{e.title}</td><td>{new Date(e.date).toLocaleDateString()}</td><td>{e.time}</td><td>{e.venue}</td><td>{e.status}</td></tr>)}</tbody></table>
+  </div>);
+}
+
+function MyEvents() {
+  const [events, setEvents] = useState([]);
+  useEffect(() => { axios.get(\`\${API}/my-events\`, getToken()).then(r => setEvents(r.data)); }, []);
+  return (<div><h2>My Events</h2>{events.map(e=><div key={e._id} style={{border:'1px solid #ccc',padding:8,margin:4}}><h3>{e.title}</h3><p>{new Date(e.date).toLocaleDateString()} {e.time} | {e.venue}</p></div>)}</div>);
+}
+
+export default function App() {
+  const [user, setUser] = useState(null); const [page, setPage] = useState('events');
+  if (!user) return <Auth onLogin={setUser} />;
+  return (<div><nav><button onClick={()=>setPage('events')}>Events</button><button onClick={()=>setPage('schedule')}>Schedule</button>
+    {user.role==='student'&&<button onClick={()=>setPage('my')}>My Events</button>}
+    {['organizer','admin'].includes(user.role)&&<><button onClick={()=>setPage('create')}>Create</button><button onClick={()=>setPage('manage')}>Manage</button></>}
+    <button onClick={()=>{localStorage.removeItem('token');setUser(null)}}>Logout</button></nav>
+    {page==='events'&&<EventList user={user}/>}{page==='schedule'&&<Schedule/>}{page==='create'&&<CreateEvent/>}
+    {page==='manage'&&<ManageParticipants/>}{page==='my'&&<MyEvents/>}
+  </div>);
+}
+
+// ========== .env ==========
+MONGO_URI=mongodb://localhost:27017/eventmanagement
+JWT_SECRET=eventsecret
+PORT=5000
+
+// ========== package.json ==========
+{ "name": "event-server", "version": "1.0.0", "main": "server.js", "scripts": { "start": "node server.js", "dev": "nodemon server.js" }, "dependencies": { "express": "^4.18.2", "mongoose": "^7.0.0", "cors": "^2.8.5", "bcryptjs": "^2.4.3", "jsonwebtoken": "^9.0.0", "dotenv": "^16.0.0" } }
+`;
+
+function copyAll(btn) {
+  navigator.clipboard.writeText(ALL).then(function() {
+    btn.classList.add('copied');
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>
